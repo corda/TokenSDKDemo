@@ -1,4 +1,4 @@
-package com.r3.vaultgenerator.main.commands
+package com.r3.demo.nodes.commands
 
 import com.r3.demo.nodes.Main
 import com.r3.demo.nodes.User
@@ -26,11 +26,11 @@ class ReportTest {
         val assessor = User(main, "gic", "userB", "","","")
 
         Mockito.`when`(main.getUser(eq("alice"))).thenReturn(requester)
-        Mockito.`when`(main.getUser(eq("bob"))).thenReturn(assessor)
+        Mockito.`when`(main.getUser(eq("gic"))).thenReturn(assessor)
         Mockito.`when`(main.getWellKnownUser(eq(requester), any(CordaRPCOps::class.java))).thenReturn(ALICE.party)
         Mockito.`when`(main.getWellKnownUser(eq(assessor), any(CordaRPCOps::class.java))).thenReturn(GIC.party)
 
-        val text = "report alice (gic, alice, 1.0, VVS2, E, EX)"
+        val text = "create alice (gic, alice, 1.0, VVS2, E, 'EX')"
         val report = Utilities.parseReport(main, service, text)
 
         assertEquals(ALICE.party, report.requester)
