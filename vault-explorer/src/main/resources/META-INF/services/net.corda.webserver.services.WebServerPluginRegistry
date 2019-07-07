@@ -1,0 +1,2 @@
+# Register a ServiceLoader service extending from net.corda.node.CordaPluginRegistry
+com.r3.vaultrecycler.explorer.plugin.ExplorerPlugin

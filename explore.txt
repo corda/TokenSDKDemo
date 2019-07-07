@@ -1,0 +1,36 @@
+3B7F54F3 consumed
+  + > FungibleToken consumed
+97647B86 consumed
+  + > FungibleToken consumed
+BCB74A1E consumed
+  + > FungibleToken consumed
+A55E711A consumed
+  + > DiamondGradingReport consumed
+4F69E76A active
+  + < 2AEA5781[0]
+  + < 3B7F54F3[0]
+  + - A55E711A[0]
+  + > NonFungibleToken consumed
+  + > FungibleToken non participant
+  + > FungibleToken non participant
+2AEA5781 active
+  + < 97647B86[0]
+  + - A55E711A[0]
+  + > NonFungibleToken consumed
+  + > FungibleToken consumed
+  + > FungibleToken non participant
+8AE61EBE active
+  + < 4F69E76A[0]
+  + < BCB74A1E[0]
+  + - A55E711A[0]
+  + > NonFungibleToken consumed
+  + > FungibleToken non participant
+  + > FungibleToken unconsumed
+3D199808 active
+  + < A55E711A[0]
+  + > DiamondGradingReport non participant
+8050D4C4 active
+  + < 8AE61EBE[0]
+  + < 2AEA5781[1]
+  + - 3D199808[0]
+  + > FungibleToken unconsumed

@@ -1,0 +1,227 @@
+buildscript {
+    ext {
+        corda_release_group = 'net.corda'
+        corda_release_version = '4.1'
+    	corda_platform_version = '4'
+        corda_gradle_plugins_version = '4.0.42'
+        mavenVersion = '3.1.0'
+        maven_resolver_version = "1.1.1"
+        kotlin_version = '1.3.21'
+        junit_version = '4.12'
+        dokka_version = '0.9.17'
+    }
+
+    repositories {
+        jcenter()
+        mavenLocal()
+        mavenCentral()
+        maven { url "http://ci-artifactory.corda.r3cev.com/artifactory/corda-releases" }
+    }
+
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        classpath "net.corda.plugins:cordformation:$corda_gradle_plugins_version"
+        classpath "net.corda.plugins:quasar-utils:$corda_gradle_plugins_version"
+        classpath "net.corda.plugins:cordapp:$corda_gradle_plugins_version"
+        classpath "org.jetbrains.dokka:dokka-gradle-plugin:${dokka_version}"
+    }
+}
+
+plugins {
+    id "com.jfrog.artifactory" version "4.7.5"
+}
+
+allprojects {
+    apply plugin: 'java'
+
+    version "1.0-SNAPSHOT"
+    group "com.r3.demo"
+
+    repositories {
+        jcenter()
+        mavenLocal()
+        mavenCentral()
+        maven { url 'https://ci-artifactory.corda.r3cev.com/artifactory/corda-releases' }
+        maven { url 'https://jitpack.io' }
+    }
+
+    configurations {
+        compile {
+            // We want to use SLF4J's version of these bindings: jcl-over-slf4j
+            // Remove any transitive dependency on Apache's version.
+            exclude group: 'commons-logging', module: 'commons-logging'
+        }
+    }
+
+    configurations.all {
+        resolutionStrategy {
+            // Force dependencies to use the same version of Kotlin
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jre8:$kotlin_version"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jre7:$kotlin_version"
+            force "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
+        }
+    }
+
+    tasks.withType(JavaCompile) {
+        options.compilerArgs << "-parameters" // Required for shell commands.
+    }
+
+    jar {
+        // CorDapps do not configure a Node's logging.
+        exclude '**/log4j2*.xml'
+    }
+}
+
+apply plugin: 'net.corda.plugins.cordapp'
+apply plugin: 'net.corda.plugins.cordformation'
+
+cordapp {
+    targetPlatformVersion corda_platform_version.toInteger()
+    minimumPlatformVersion corda_platform_version.toInteger()
+
+    info {
+        name "Corda Options"
+        vendor "Corda Open Source"
+    }
+
+    signing {
+        enabled false
+    }
+}
+
+subprojects {
+    buildscript {
+        repositories {
+            jcenter()
+            mavenLocal()
+            mavenCentral()
+        }
+    }
+
+    repositories {
+        jcenter()
+        mavenLocal()
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+        maven { url "http://ci-artifactory.corda.r3cev.com/artifactory/corda-dev" }
+        maven { url "http://ci-artifactory.corda.r3cev.com/artifactory/corda-releases" }
+    }
+}
+
+dependencies {
+    // CorDapp dependencies.
+
+    cordapp "com.r3.tokens-sdk:tokens-contracts:1.0-SNAPSHOT"
+    cordapp "com.r3.tokens-sdk:tokens-workflows:1.0-SNAPSHOT"
+    cordapp "com.r3.tokens-sdk:tokens-money:1.0-SNAPSHOT"
+
+    // Needed by deployNodes task.
+    cordaRuntime "$corda_release_group:corda:$corda_release_version"
+    cordaRuntime "$corda_release_group:corda-node-api:$corda_release_version"
+}
+
+wrapper {
+    gradleVersion = "4.10.2"
+    distributionType = Wrapper.DistributionType.ALL
+}
+
+def rpcUsersList = [
+        ['username' : "user1",
+         'password' : "password",
+         'permissions' : ["ALL"]]
+]
+
+task deployNodes(type: net.corda.plugins.Cordform, dependsOn: ['jar']) {
+    directory "./build/nodes"
+
+    nodeDefaults {
+        cordapps = [
+            "com.r3.tokens-sdk:tokens-contracts:1.0-SNAPSHOT",
+            "com.r3.tokens-sdk:tokens-workflows:1.0-SNAPSHOT",
+            "com.r3.tokens-sdk:tokens-money:1.0-SNAPSHOT"
+        ]
+    }
+
+    node {
+        name "O=Notary,L=London,C=GB"
+        notary = [validating: false]
+        p2pPort 10002
+        h2Port 50000
+        rpcSettings {
+            address("localhost:10001")
+            adminAddress("localhost:10003")
+        }
+        projectCordapp {
+            deploy = true
+        }
+        cordapps.clear()
+    }
+    node {
+        name "O=GIC,L=Canberra,C=AU"
+        p2pPort 10005
+        //webPort 11005
+        h2Port 50001
+        rpcSettings {
+            useSsl false
+            standAloneBroker false
+            address "0.0.0.0:10004"
+            adminAddress "0.0.0.0:10006"
+        }
+        rpcUsers = rpcUsersList
+    }
+    node {
+        name "O=Alice,L=Sydney,C=AU"
+        p2pPort 10008
+        //webPort 11008
+        h2Port 50002
+        rpcSettings {
+            useSsl false
+            standAloneBroker false
+            address "0.0.0.0:10007"
+            adminAddress "0.0.0.0:10009"
+        }
+        rpcUsers = rpcUsersList
+    }
+    node {
+        name "O=Bob,L=Melbourne,C=AU"
+        p2pPort 10011
+        //webPort 11011
+        h2Port 50003
+        rpcSettings {
+            useSsl false
+            standAloneBroker false
+            address "0.0.0.0:10010"
+            adminAddress "0.0.0.0:10012"
+        }
+        rpcUsers = rpcUsersList
+    }
+    node {
+        name "O=Charlie,L=Perth,C=AU"
+        p2pPort 10014
+        //webPort 11014
+        h2Port 50006
+        rpcSettings {
+            useSsl false
+            standAloneBroker false
+            address "0.0.0.0:10013"
+            adminAddress "0.0.0.0:10015"
+        }
+        rpcUsers = rpcUsersList
+    }
+    node {
+        name "O=Dealer,L=Brisbane,C=AU"
+        p2pPort 10017
+        //webPort 11017
+        h2Port 50005
+        rpcSettings {
+            useSsl false
+            standAloneBroker false
+            address "0.0.0.0:10016"
+            adminAddress "0.0.0.0:10018"
+        }
+        rpcUsers = rpcUsersList
+    }
+}
+
