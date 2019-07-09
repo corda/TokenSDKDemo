@@ -1,10 +1,8 @@
 package com.r3.demo.nodes.commands
 
-import com.r3.corda.lib.tokens.money.FiatCurrency
 import net.corda.core.messaging.startTrackedFlow
 import com.r3.demo.nodes.Main
 import com.r3.demo.tokens.flows.PurchaseDiamondGradingReportFlow
-import net.corda.core.contracts.Amount
 
 /**
  * Implement the issue command
@@ -33,9 +31,7 @@ class Purchase : Command {
         val buyer = main.getWellKnownUser(main.getUser(array[2]), service)
         val linearId = main.retrieveNode(array[3]) ?: throw IllegalArgumentException("Report ID ${array[3]} not found")
 
-        val issueAmount = Utilities.getAmount(array[4])
-        val fiatCurrency = FiatCurrency(issueAmount.token)
-        val amount = Amount(issueAmount.quantity, fiatCurrency)
+        val amount = Utilities.getAmount(array[4])
 
         service.startTrackedFlow(::PurchaseDiamondGradingReportFlow, linearId, buyer, amount).returnValue.get()
 

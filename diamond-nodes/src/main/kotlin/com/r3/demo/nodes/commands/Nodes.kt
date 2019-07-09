@@ -2,7 +2,6 @@ package com.r3.demo.nodes.commands
 
 import com.r3.corda.lib.tokens.contracts.states.FungibleToken
 import com.r3.corda.lib.tokens.contracts.states.NonFungibleToken
-import com.r3.corda.lib.tokens.contracts.types.TokenType
 import net.corda.core.messaging.vaultQueryBy
 import com.r3.demo.nodes.Main
 import com.r3.demo.tokens.state.DiamondGradingReport
@@ -43,7 +42,7 @@ class Nodes : Command {
         }
 
         // Get the list of unconsumed token pointers from the vault
-        val tokenPage = service.vaultQueryBy<NonFungibleToken<TokenType>>().states
+        val tokenPage = service.vaultQueryBy<NonFungibleToken>().states
         val tokens = tokenPage.map { it.state.data }
 
         // Record the linear id against the name for easy reference
@@ -53,7 +52,7 @@ class Nodes : Command {
         }
 
         // Get the list of unconsumed token pointers from the vault
-        val moneyPage = service.vaultQueryBy<FungibleToken<TokenType>>().states
+        val moneyPage = service.vaultQueryBy<FungibleToken>().states
         val monies = moneyPage.map { it.state.data }
 
         // Record the linear id against the name for easy reference

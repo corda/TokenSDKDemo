@@ -26,7 +26,14 @@ cordapp {
     minimumPlatformVersion corda_platform_version.toInteger()
 
     signing {
-        enabled false
+        enabled true
+        options {
+            keystore "../cordapp.jks"
+            keypass "cordapp"
+            storepass "cordapp"
+            storetype "PKCS12"
+            alias "cordapp"
+        }
     }
     contract {
         name "Diamond"
@@ -48,8 +55,8 @@ dependencies {
     cordaCompile "$corda_release_group:corda-jackson:$corda_release_version"
     cordaCompile "$corda_release_group:corda-webserver-impl:$corda_release_version"
 
-    cordaCompile "com.r3.tokens-sdk:tokens-contracts:1.0-SNAPSHOT"
-    cordaCompile "com.r3.tokens-sdk:tokens-workflows:1.0-SNAPSHOT"
+    cordaCompile "com.r3.corda.lib.tokens:tokens-contracts:1.1-SNAPSHOT"
+    cordaCompile "com.r3.corda.lib.tokens:tokens-workflows:1.1-SNAPSHOT"
 
     testCompile "$corda_release_group:corda-test-utils:$corda_release_version"
     testCompile "$corda_release_group:corda-node-driver:$corda_release_version"

@@ -1,7 +1,7 @@
 package com.r3.demo.tokens.flows
 
 import co.paralleluniverse.fibers.Suspendable
-import com.r3.corda.lib.tokens.workflows.flows.evolvable.UpdateEvolvableToken
+import com.r3.corda.lib.tokens.workflows.flows.rpc.UpdateEvolvableToken
 import com.r3.demo.tokens.state.DiamondGradingReport
 import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.flows.*

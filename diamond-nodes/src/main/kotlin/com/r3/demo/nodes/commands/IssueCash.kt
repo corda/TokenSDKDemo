@@ -1,9 +1,7 @@
 package com.r3.demo.nodes.commands
 
-import com.r3.corda.lib.tokens.money.FiatCurrency
 import com.r3.demo.nodes.Main
 import com.r3.demo.tokens.flows.CashIssueFlow
-import net.corda.core.contracts.Amount
 import net.corda.core.messaging.startFlow
 
 class IssueCash : Command {
@@ -27,10 +25,7 @@ class IssueCash : Command {
         val service = connection.proxy
         val receiver = main.getWellKnownUser(main.getUser(array[2]), service)
 
-        val issueAmount = Utilities.getAmount(array[3])
-        val fiatCurrency = FiatCurrency(issueAmount.token)
-        val amount = Amount(issueAmount.quantity, fiatCurrency)
-
+        val amount = Utilities.getAmount(array[3])
         val cashState = service.startFlow(::CashIssueFlow, receiver, amount).returnValue.get()
 
         return listOf(cashState.toString()).listIterator()
