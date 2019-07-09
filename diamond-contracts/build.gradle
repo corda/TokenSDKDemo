@@ -26,7 +26,7 @@ cordapp {
     minimumPlatformVersion corda_platform_version.toInteger()
 
     signing {
-        enabled true
+        enabled false
         options {
             keystore "../cordapp.jks"
             keypass "cordapp"
