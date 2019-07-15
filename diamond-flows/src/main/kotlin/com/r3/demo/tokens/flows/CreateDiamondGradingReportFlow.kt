@@ -2,7 +2,7 @@ package com.r3.demo.tokens.flows
 
 import co.paralleluniverse.fibers.Suspendable
 import com.r3.corda.lib.tokens.contracts.utilities.withNotary
-import com.r3.corda.lib.tokens.workflows.flows.evolvable.CreateEvolvableToken
+import com.r3.corda.lib.tokens.workflows.flows.rpc.CreateEvolvableTokens
 import com.r3.demo.tokens.state.DiamondGradingReport
 import net.corda.core.flows.*
 import net.corda.core.transactions.SignedTransaction
@@ -18,7 +18,7 @@ class CreateDiamondGradingReportFlow(private val diamondGradingReport: DiamondGr
         val notary = serviceHub.networkMapCache.notaryIdentities.first()
         val transactionState = diamondGradingReport withNotary notary
 
-        return subFlow(CreateEvolvableToken(transactionState))
+        return subFlow(CreateEvolvableTokens(transactionState))
     }
 }
 

@@ -1,10 +1,8 @@
 package com.r3.demo.nodes.commands
 
-import com.r3.corda.lib.tokens.money.FiatCurrency
 import net.corda.core.messaging.startTrackedFlow
 import com.r3.demo.nodes.Main
 import com.r3.demo.tokens.flows.CashTransferFlow
-import net.corda.core.contracts.Amount
 
 /**
  * Implement the pay-cash command
@@ -32,9 +30,7 @@ class PayCash : Command {
         val service = connection.proxy
         val receiver = main.getWellKnownUser(main.getUser(array[2]), service)
 
-        val payAmount = Utilities.getAmount(array[3])
-        val fiatCurrency = FiatCurrency(payAmount.token)
-        val amount = Amount(payAmount.quantity, fiatCurrency)
+        val amount = Utilities.getAmount(array[3])
 
         service.startTrackedFlow(::CashTransferFlow, receiver, amount).returnValue.get()
 

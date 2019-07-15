@@ -1,10 +1,10 @@
 package com.r3.demo.tokens.flows
 
 import co.paralleluniverse.fibers.Suspendable
+import com.r3.corda.lib.tokens.contracts.types.TokenType
 import com.r3.corda.lib.tokens.workflows.flows.move.MoveTokensFlowHandler
-import com.r3.corda.lib.tokens.workflows.flows.move.addMoveTokens
 import com.r3.corda.lib.tokens.workflows.internal.flows.finality.ObserverAwareFinalityFlow
-import com.r3.corda.lib.tokens.money.FiatCurrency
+import com.r3.corda.lib.tokens.workflows.flows.move.addMoveFungibleTokens
 import net.corda.core.contracts.Amount
 import net.corda.core.flows.*
 import net.corda.core.identity.Party
@@ -18,13 +18,13 @@ import net.corda.core.transactions.TransactionBuilder
 @StartableByRPC
 class CashTransferFlow(
         private val buyer: Party,
-        private val amount: Amount<FiatCurrency>) : FlowLogic<SignedTransaction>() {
+        private val amount: Amount<TokenType>) : FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
         val notary = serviceHub.networkMapCache.notaryIdentities.first()
         val builder = TransactionBuilder(notary)
 
-        addMoveTokens(builder, serviceHub, amount, buyer, ourIdentity, null)
+        addMoveFungibleTokens(builder, serviceHub, amount, buyer, ourIdentity, null)
 
         val others = listOf( ourIdentity ).map{ party -> initiateFlow(party) }
         val flows = listOf( ourIdentity, buyer ).map{ party -> initiateFlow(party) }

@@ -3,14 +3,14 @@ package com.r3.demo.tokens.flows
 import co.paralleluniverse.fibers.Suspendable
 import com.r3.corda.lib.tokens.contracts.states.NonFungibleToken
 import com.r3.corda.lib.tokens.contracts.types.TokenPointer
+import com.r3.corda.lib.tokens.contracts.types.TokenType
 import com.r3.corda.lib.tokens.workflows.flows.move.MoveTokensFlowHandler
 import com.r3.corda.lib.tokens.workflows.flows.move.addMoveTokens
 import com.r3.corda.lib.tokens.workflows.internal.flows.distribution.UpdateDistributionListFlow
 import com.r3.corda.lib.tokens.workflows.internal.flows.finality.ObserverAwareFinalityFlow
-import com.r3.corda.lib.tokens.money.FiatCurrency
+import com.r3.corda.lib.tokens.workflows.flows.move.addMoveFungibleTokens
 import com.r3.demo.tokens.state.DiamondGradingReport
 import net.corda.core.contracts.Amount
-import net.corda.core.contracts.StateAndRef
 import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.flows.*
 import net.corda.core.identity.Party
@@ -31,14 +31,14 @@ import net.corda.core.utilities.unwrap
 class TransferDiamondGradingReportFlow(
         private val tokenId: UniqueIdentifier,
         private val buyer: Party,
-        private val amount: Amount<FiatCurrency>) : FlowLogic<SignedTransaction>() {
+        private val amount: Amount<TokenType>) : FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
-        @Suppress("unchecked_cast")
         val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId)
-                as StateAndRef<NonFungibleToken<TokenPointer<DiamondGradingReport>>>
 
-        val reportId = original.state.data.token.tokenType.pointer.pointer
+        @Suppress("unchecked_cast")
+        val tokenPointer = original.state.data.token.tokenType as TokenPointer<DiamondGradingReport>
+        val reportId = tokenPointer.pointer.pointer
 
         val diamondGradingReportRef = getStateReference(serviceHub, DiamondGradingReport::class.java, reportId)
 
@@ -78,7 +78,7 @@ class TransferDiamondGradingReportFlow(
             subFlow(ReceiveTransactionFlow(flowSession, statesToRecord = StatesToRecord.ALL_VISIBLE))
 
             // Receive the token being sold
-            val originalToken = subFlow(ReceiveStateAndRefFlow<NonFungibleToken<TokenPointer<DiamondGradingReport>>>(flowSession)).single()
+            val originalToken = subFlow(ReceiveStateAndRefFlow<NonFungibleToken>(flowSession)).single()
 
             // Receive the trade details
             val tradeInfo = flowSession.receive<SellerTradeInfo>().unwrap { it }
@@ -94,7 +94,7 @@ class TransferDiamondGradingReportFlow(
 
             // Exchange the token and payment
             addMoveTokens(builder, listOf(originalToken), listOf(modifiedToken))
-            addMoveTokens(builder, serviceHub, tradeInfo.price, tradeInfo.party, ourIdentity, null)
+            addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, tradeInfo.party, ourIdentity, null)
 
             // Sign off the transaction
             val selfSignedTransaction = serviceHub.signInitialTransaction(builder)
@@ -108,7 +108,7 @@ class TransferDiamondGradingReportFlow(
 
     @CordaSerializable
     data class SellerTradeInfo(
-            val price: Amount<FiatCurrency>,
+            val price: Amount<TokenType>,
             val party: Party
     )
 }

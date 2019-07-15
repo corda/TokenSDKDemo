@@ -1,16 +1,16 @@
 package com.r3.demo.nodes.commands
 
+import com.r3.corda.lib.tokens.contracts.types.TokenType
+import com.r3.corda.lib.tokens.money.FiatCurrency
 import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.contracts.Amount
 import com.r3.demo.nodes.Main
 import com.r3.demo.tokens.state.DiamondGradingReport
 import net.corda.core.contracts.UniqueIdentifier
-import net.corda.nodeapi.internal.persistence.currentDBSession
 import java.io.ByteArrayInputStream
 import java.io.FileOutputStream
 import java.lang.IllegalArgumentException
 import java.lang.StringBuilder
-import java.util.*
 import java.util.regex.Pattern
 import java.util.zip.ZipInputStream
 
@@ -18,7 +18,7 @@ object Utilities {
     /**
      * Parse the amount value recorded in the text.
      */
-    fun getAmount(text: String): Amount<Currency> {
+    fun getAmount(text: String): Amount<TokenType> {
         val pattern = Pattern.compile("([a-zA-Z$]+)(\\d+)")
         val matcher = pattern.matcher(text)
 
@@ -34,7 +34,7 @@ object Utilities {
             currency = currency.replace("S$", "SGD")
             currency = currency.replace("$", "USD")
 
-            return Amount(amount.toLong() * 100, Currency.getInstance(currency))
+            return Amount(amount.toLong() * 100, FiatCurrency.getInstance(currency))
         } catch (e: Exception) {
             throw java.lang.IllegalArgumentException("Cannot parse amount ${text}")
         }
@@ -83,7 +83,7 @@ object Utilities {
     }
 
     private fun parseColour(parameters: String): DiamondGradingReport.ColorScale {
-        val pattern = Pattern.compile("[^\\w]([D-N])[^\\w]")
+        val pattern = Pattern.compile("[^\\w]([D-Q])[^\\w]")
         val matcher = pattern.matcher(parameters)
 
         if (matcher.find()){

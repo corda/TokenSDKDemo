@@ -3,7 +3,7 @@
 ## Overview
 
 This sample code project demonstrates how the Token SDK can be used in a delivery vs payment scenario.
-In this scenario a diamond dealer registers a diamond with a diamond grading authority and sells the diamond
+In this scenario a diamond dealer registers diamonds with a diamond grading authority and sells the diamonds
 to customers. The customers can sell the diamond token to other customers. The diamond grading authority can
 later change the diamond grading. Any evolution in the diamond grade report is seen by the current holder of
 the token. Later the diamond token can be redeemed for cash.
@@ -25,11 +25,11 @@ The following steps can be used to build the application, run the nodes and star
     ./build/nodes/runnodes
     java -jar diamond-nodes/build/libs/shell-nodes-0.1.jar
 
-The current build.gradle assumes the Token SDK is version 1.0-SNAPSHOT.
+The current build.gradle assumes the Token SDK is version 1.1-SNAPSHOT.
 
-    cordapp "com.r3.tokens-sdk:tokens-contracts:1.0-SNAPSHOT"
-    cordapp "com.r3.tokens-sdk:tokens-workflows:1.0-SNAPSHOT"
-    cordapp "com.r3.tokens-sdk:tokens-money:1.0-SNAPSHOT"
+    cordapp "com.r3.corda.lib.tokens:tokens-contracts:1.1-SNAPSHOT"
+    cordapp "com.r3.corda.lib.tokens:tokens--workflows:1.1-SNAPSHOT"
+    cordapp "com.r3.corda.lib.tokens:tokens--money:1.1-SNAPSHOT"
 
 ## RPC Client Commands
 
@@ -37,7 +37,7 @@ The RPC client application can be used to start flows on the Corda nodes. The ge
 
     <command> <node> arguments ...
 
-Where <node> is one of GIC, Dealer, Alice, Bob or Charlie.
+Where node is one of GIC, Dealer, Alice, Bob or Charlie.
 
 ### help [command]
 
@@ -62,7 +62,7 @@ List the unused fungible and non fungible tokens on a user's vault.
 
     list Alice
 
-This command is used to retrieve the token-ids needed to transfer and redeem tokens.
+This command is needed to retrieve the token-ids abd report-ids used in other commands.
 
 ### create authority (accessor, dealer, carets, clarity, colour, cut)
 
@@ -71,7 +71,7 @@ Carets should be a decimal number. Clarity one of VVS1, VVS2, VS1, VS2, VI1, VI2
 
     create GIC (GIC, Dealer, 1.0, VVS1, D, 'oval')
 
-This command will return the report-id which should be used in the purchase command.
+This command will return the report-id which should be used in the purchase and update commands.
 
 ### update authority report-id (accessor, dealer, carets, clarity, colour, cut)
 
@@ -79,22 +79,21 @@ Update a diamond grade report.
 
     update GIC abcd (GIC, Dealer, 0.99, VVS1, E, 'oval')
 
-This command will return the report-id which should be used in the purchase command.
-
+The report-id can be any identifiable prefix of a valid report-id.
 
 ### purchase dealer buyer report-id amount
 
 Purchase a diamond from a dealer. This will create a non-fungible token in the buyer's vault.
-The report-id given on the command line can be prefix of the linear-id used to record the diamond grade report.
+The report-id given on the command line can be a prefix of the linear-id used to record the diamond grade report.
 
     purchase Dealer Alice abcd $350
 
-To find the token-id of the NFT use the list command on the buyer's vault.
+To find the token-id of the new NFT use the list command on the buyer's vault.
 
 ### transfer seller buyer token-id amount
 
-Sell a diamond token between users. The token-id can be obtained using the list command.
-The token-id given on the command line can be prefix of the token-id used to record the diamond token.
+Sell a diamond token between users. The token-id can be obtained by using the list command.
+The token-id given on the command line can be a prefix of the token-id used to record the diamond token.
 
     transfer Alice Bob 1234 $550
 
