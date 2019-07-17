@@ -62,7 +62,7 @@ List the unused fungible and non fungible tokens on a user's vault.
 
     list Alice
 
-This command is needed to retrieve the token-ids abd report-ids used in other commands.
+This command is needed to retrieve the token-ids and report-ids used in other commands.
 
 ### create authority (accessor, dealer, carets, clarity, colour, cut)
 
