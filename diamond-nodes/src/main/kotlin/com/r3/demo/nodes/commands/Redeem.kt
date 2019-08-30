@@ -33,7 +33,11 @@ class Redeem : Command {
 
         val amount = Utilities.getAmount(array[4])
 
+        Utilities.logStart()
+
         service.startTrackedFlow(::RedeemDiamondGradingReportFlow, tokenId, issuer, amount).returnValue.get()
+
+        Utilities.logFinish()
 
         // Display the new list of unconsumed states
         val nodes = Nodes()
@@ -46,7 +50,11 @@ class Redeem : Command {
         return COMMAND
     }
 
+    override fun description(): String {
+        return "Redeem a diamond token for cash"
+    }
+
     override fun help(): kotlin.collections.List<String> {
-        return listOf("usage: redeem owner issuer token-id payment")
+        return listOf("usage: redeem owner dealer token-id payment")
     }
 }

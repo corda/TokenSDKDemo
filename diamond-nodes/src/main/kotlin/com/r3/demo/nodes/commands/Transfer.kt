@@ -33,7 +33,11 @@ class Transfer : Command {
 
         val amount = Utilities.getAmount(array[4])
 
+        Utilities.logStart()
+
         service.startTrackedFlow(::TransferDiamondGradingReportFlow, tokenId, buyer, amount).returnValue.get()
+
+        Utilities.logFinish()
 
         // Display the new list of unconsumed states
         val nodes = Nodes()
@@ -44,6 +48,10 @@ class Transfer : Command {
 
     override fun name(): String {
         return COMMAND
+    }
+
+    override fun description(): String {
+        return "Sell a diamond token"
     }
 
     override fun help(): kotlin.collections.List<String> {

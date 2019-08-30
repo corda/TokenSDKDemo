@@ -38,7 +38,7 @@ class Nodes : Command {
         // Record the linear id against the name for easy reference
         states.forEach{
             main.registerNode(it.linearId.toString(), it.linearId)
-            list.add(it.printReport())
+            list.add("${it.linearId.toString().substring(0, 8)} = ${it.printReport()}")
         }
 
         // Get the list of unconsumed token pointers from the vault
@@ -48,7 +48,7 @@ class Nodes : Command {
         // Record the linear id against the name for easy reference
         tokens.forEach{
             main.registerNode(it.linearId.toString(), it.linearId)
-            list.add("${it.linearId} = (${it})")
+            list.add("${it.linearId.toString().substring(0, 8)} = (${it.printReport()})")
         }
 
         // Get the list of unconsumed token pointers from the vault
@@ -65,6 +65,10 @@ class Nodes : Command {
 
     override fun name(): String {
         return COMMAND
+    }
+
+    override fun description(): String {
+        return "List unconsumed tokens"
     }
 
     override fun help(): List<String> {

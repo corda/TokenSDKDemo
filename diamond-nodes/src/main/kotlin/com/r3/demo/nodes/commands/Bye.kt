@@ -35,4 +35,8 @@ class Bye : Command {
     override fun help(): List<String> {
         return listOf("usage: bye")
     }
+
+    override fun description(): String {
+        return "Exit client"
+    }
 }

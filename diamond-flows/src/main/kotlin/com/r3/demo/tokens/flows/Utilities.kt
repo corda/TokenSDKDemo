@@ -6,6 +6,8 @@ import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.contracts.requireThat
 import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.vault.QueryCriteria
+import net.corda.core.utilities.contextLogger
+import java.util.concurrent.atomic.AtomicLong
 
 fun <T : ContractState> getStateReference(serviceHub: ServiceHub, clazz: Class<T>, id: UniqueIdentifier): StateAndRef<T> {
     val vaultPage = serviceHub.vaultService.queryBy(clazz,
@@ -16,5 +18,13 @@ fun <T : ContractState> getStateReference(serviceHub: ServiceHub, clazz: Class<T
     }
 
     return vaultPage.states.first()
+}
+
+fun logTime(serviceHub: ServiceHub, logstart: AtomicLong, message: String){
+    val logtime = System.currentTimeMillis() - logstart.get()
+
+    serviceHub.contextLogger().info("TTT - ${message} = ${logtime}ms")
+
+    logstart.set(System.currentTimeMillis())
 }
 

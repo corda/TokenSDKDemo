@@ -22,6 +22,11 @@ interface Command {
     fun help(): List<String>
 
     /**
+     * Return help
+     */
+    fun description(): String { return "" }
+
+    /**
      * Return command name
      */
     fun name(): String

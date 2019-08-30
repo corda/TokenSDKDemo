@@ -10,6 +10,7 @@ import net.corda.core.contracts.Amount
 import net.corda.core.flows.*
 import net.corda.core.identity.Party
 import net.corda.core.transactions.SignedTransaction
+import java.util.concurrent.atomic.AtomicLong
 
 @InitiatingFlow
 @StartableByRPC
@@ -19,12 +20,17 @@ import net.corda.core.transactions.SignedTransaction
 class CashIssueFlow(val receiver: Party, val amount: Amount<TokenType>) : FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
+        val logstart = AtomicLong(System.currentTimeMillis())
         val token = amount issuedBy ourIdentity heldBy receiver
 
         val flows = token.participants.map { party -> initiateFlow(party as Party) }
         val flow = IssueTokensFlow(token, flows, emptyList())
 
-        return subFlow(flow)
+        try {
+            return subFlow(flow)
+        } finally {
+            logTime(serviceHub, logstart, "Cash Issue Flow")
+        }
     }
 
     @Suppress("unused")
@@ -32,7 +38,11 @@ class CashIssueFlow(val receiver: Party, val amount: Amount<TokenType>) : FlowLo
     class CashIssueFlowResponse (val flowSession: FlowSession): FlowLogic<Unit>() {
         @Suspendable
         override fun call() {
+            val logstart = AtomicLong(System.currentTimeMillis())
+
             subFlow(IssueTokensFlowHandler(flowSession))
+
+            logTime(serviceHub, logstart, "Cash Issue Flow Handler")
         }
     }
 }

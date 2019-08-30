@@ -9,7 +9,6 @@ import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
 import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.utilities.NetworkHostAndPort
-import org.apache.commons.jexl3.MapContext
 import org.slf4j.LoggerFactory
 import java.io.*
 import java.lang.Exception
@@ -30,6 +29,7 @@ fun main(args: Array<String>) {
     var configRoot = "."
     var filename = ""
     var silent = false
+    var logTime = false
 
     while (iterator.hasNext()){
         val argument = iterator.next()
@@ -37,6 +37,7 @@ fun main(args: Array<String>) {
             "-d" -> configRoot = iterator.next()
             "-f" -> filename = iterator.next()
             "-s" -> silent = true
+            "-l" -> logTime = true
             "-h" -> usage()
             else -> throw IllegalArgumentException("Unknown option: ${argument}")
         }
@@ -68,10 +69,18 @@ fun main(args: Array<String>) {
             continue
         }
 
+        if (logTime){
+            System.out.println("Time start ${Date()}")
+        }
+
         val response = main.parseCommand(command, array, line)
 
         if (!silent){
             response.forEach { System.out.println(it) }
+            if (logTime && Utilities.logtime >= 0){
+                System.out.println("Time duration = ${Utilities.logtime}ms")
+                Utilities.logCancel()
+            }
         }
     }
 
@@ -107,17 +116,17 @@ private fun usage(){
 class Main(configRoot: String) {
     private val logger = LoggerFactory.getLogger("Main")
 
-    private val legalNamePattern = Pattern.compile("myLegalName=\"([^\"]+)\"")
-    private val usernamePattern = Pattern.compile("username=(\\w+)")
-    private val passwordPattern = Pattern.compile("password=(\\w+)")
-    private val addressPattern = Pattern.compile("address=\"([^\"]+)\"")
+    private val legalNamePattern = Pattern.compile("myLegalName\"?[\\s=:]+\"([^\"]+)\"")
+    private val usernamePattern = Pattern.compile("\\s\"?username\"?[\\s=:]+\"?(\\w+)")
+    private val passwordPattern = Pattern.compile("\\s\"?password\"?[\\s=:]+\"?(\\w+)")
+    private val addressPattern = Pattern.compile("address\"?[\\s=:]+\"([^\"]+)\"")
 
     private val connectionMap = HashMap<String, CordaRPCConnection>()
     private val nodeMap = HashMap<String, UniqueIdentifier>()
 
     val userMap = readConfiguration(configRoot)
     val commandMap = createCommandMap()
-    val context = createExecutionContext()
+//    val context = createExecutionContext()
 
     /**
      * Retrive the [Command] implementation for the command and execute it.
@@ -181,22 +190,6 @@ class Main(configRoot: String) {
     }
 
     /**
-     * Create JEXL context for executing scripts.
-     * All users are added to the context so that they can be reference directly.
-     */
-    private fun createExecutionContext() : MapContext {
-        val context = MapContext()
-
-        context.set("system", System.out)
-
-        userMap.forEach{
-            context.set(it.key, it.value)
-        }
-
-        return context
-    }
-
-    /**
      * Create a map of string to command implementations
      * for all commands implemented by this application.
      */
@@ -205,16 +198,11 @@ class Main(configRoot: String) {
             Bye.COMMAND to Bye(),
             Help.COMMAND to Help(),
             Nodes.COMMAND to Nodes(),
-            Peers.COMMAND to Peers(),
-            Explore.COMMAND to Explore(),
-            Whoami.COMMAND to Whoami(),
             IssueCash.COMMAND to IssueCash(),
+            ReissueCash.COMMAND to ReissueCash(),
             PayCash.COMMAND to PayCash(),
             Create.COMMAND to Create(),
             Update.COMMAND to Update(),
-            Issue.COMMAND to Issue(),
-            Move.COMMAND to Move(),
-            Settle.COMMAND to Settle(),
             Purchase.COMMAND to Purchase(),
             Transfer.COMMAND to Transfer(),
             Redeem.COMMAND to Redeem()
@@ -250,12 +238,12 @@ class Main(configRoot: String) {
             } catch (e: Exception){
                 logger.warn("Cannot parse configuration for ${directory.name}")
             }
+        } else {
+            directory.listFiles { f -> f.isDirectory }
+                    .iterator().forEach {
+                        readConfiguration(it, map)
+                    }
         }
-
-        directory.listFiles{ f -> f.isDirectory}
-                .iterator().forEach {
-                    readConfiguration(it, map)
-                }
     }
 
     /**
@@ -272,7 +260,9 @@ class Main(configRoot: String) {
         val password = findText(passwordPattern, text)
         val address = findText(addressPattern, text)
 
-        map[name] = User(this, name, legalName, username, password, address)
+        if (!legalName.contains("notary", true)){
+            map[name] = User(this, name, legalName, username, password, address)
+        }
     }
 
     /**

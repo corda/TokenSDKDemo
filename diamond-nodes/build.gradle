@@ -49,7 +49,6 @@ dependencies {
 
     cordapp project(":diamond-contracts")
     cordapp project(":diamond-flows")
-    cordapp project(":vault-explorer")
 }
 
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {

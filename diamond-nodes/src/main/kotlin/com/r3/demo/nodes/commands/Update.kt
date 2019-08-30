@@ -33,7 +33,11 @@ class Update : Command {
         val linearId = main.retrieveNode(array[2]) ?: throw IllegalArgumentException("Report ID ${array[2]} not found")
         val report = Utilities.parseReport(main, service, parameters, linearId)
 
+        Utilities.logStart()
+
         service.startTrackedFlow(::UpdateDiamondGradingReportFlow, linearId, report).returnValue.get()
+
+        Utilities.logFinish()
 
         // Display the new list of unconsumed states
         val nodes = Nodes()
@@ -44,6 +48,10 @@ class Update : Command {
 
     override fun name(): String {
         return COMMAND
+    }
+
+    override fun description(): String {
+        return "Update a diamond grade report"
     }
 
     override fun help(): kotlin.collections.List<String> {

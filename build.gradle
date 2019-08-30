@@ -107,7 +107,8 @@ subprojects {
         maven { url 'https://jitpack.io' }
         maven { url "http://ci-artifactory.corda.r3cev.com/artifactory/corda-dev" }
         maven { url "http://ci-artifactory.corda.r3cev.com/artifactory/corda-releases" }
-    }
+        maven { url "https://repo.gradle.org/gradle/libs-releases-local" }
+   }
 }
 
 dependencies {
@@ -148,7 +149,7 @@ task deployNodes(type: net.corda.plugins.Cordform, dependsOn: ['jar']) {
         name "O=Notary,L=London,C=GB"
         notary = [validating: false]
         p2pPort 10002
-        h2Port 50000
+        //h2Port 50000
         rpcSettings {
             address("localhost:10001")
             adminAddress("localhost:10003")
@@ -161,8 +162,7 @@ task deployNodes(type: net.corda.plugins.Cordform, dependsOn: ['jar']) {
     node {
         name "O=GIC,L=Canberra,C=AU"
         p2pPort 10005
-        //webPort 11005
-        h2Port 50001
+        //h2Port 50001
         rpcSettings {
             useSsl false
             standAloneBroker false
@@ -174,8 +174,7 @@ task deployNodes(type: net.corda.plugins.Cordform, dependsOn: ['jar']) {
     node {
         name "O=Alice,L=Sydney,C=AU"
         p2pPort 10008
-        //webPort 11008
-        h2Port 50002
+        //h2Port 50002
         rpcSettings {
             useSsl false
             standAloneBroker false
@@ -187,8 +186,7 @@ task deployNodes(type: net.corda.plugins.Cordform, dependsOn: ['jar']) {
     node {
         name "O=Bob,L=Melbourne,C=AU"
         p2pPort 10011
-        //webPort 11011
-        h2Port 50003
+        //h2Port 50003
         rpcSettings {
             useSsl false
             standAloneBroker false
@@ -200,8 +198,7 @@ task deployNodes(type: net.corda.plugins.Cordform, dependsOn: ['jar']) {
     node {
         name "O=Charlie,L=Perth,C=AU"
         p2pPort 10014
-        //webPort 11014
-        h2Port 50006
+        //h2Port 50004
         rpcSettings {
             useSsl false
             standAloneBroker false
@@ -213,13 +210,24 @@ task deployNodes(type: net.corda.plugins.Cordform, dependsOn: ['jar']) {
     node {
         name "O=Dealer,L=Brisbane,C=AU"
         p2pPort 10017
-        //webPort 11017
-        h2Port 50005
+        //h2Port 50005
         rpcSettings {
             useSsl false
             standAloneBroker false
             address "0.0.0.0:10016"
             adminAddress "0.0.0.0:10018"
+        }
+        rpcUsers = rpcUsersList
+    }
+    node {
+        name "O=Bank,L=Brisbane,C=AU"
+        p2pPort 10020
+        //h2Port 50006
+        rpcSettings {
+            useSsl false
+            standAloneBroker false
+            address "0.0.0.0:10019"
+            adminAddress "0.0.0.0:10021"
         }
         rpcUsers = rpcUsersList
     }

@@ -16,7 +16,7 @@ class Create : Command {
     /**
      * Execute the report command. Creates a diamond
      * grading report on the ledger.
-     * (issuer, requester, caret, clarity, colour, cut)
+     * (issuer, dealer, caret, clarity, colour, cut)
      *
      * @param main execution context
      * @param array list of command plus arguments
@@ -29,11 +29,20 @@ class Create : Command {
 
         // Get the user who is meant to invoke the command
         val user = main.getUser(array[1])
+
+        if (!user.isCertifier()){
+            return listOf("Only graders are allowed to create reports").listIterator()
+        }
+
         val connection = main.getConnection(user)
         val service = connection.proxy
         val report = Utilities.parseReport(main, service, parameters)
 
+        Utilities.logStart()
+
         service.startTrackedFlow(::CreateDiamondGradingReportFlow, report).returnValue.get()
+
+        Utilities.logFinish()
 
         // Display the new list of unconsumed states
         val nodes = Nodes()
@@ -41,11 +50,16 @@ class Create : Command {
 
         return nodes.execute(main, text.split(" "), text)
     }
+
     override fun name(): String {
         return COMMAND
     }
 
     override fun help(): kotlin.collections.List<String> {
-        return listOf("usage: create issuer (issuer, requester, caret, clarity, colour, cut)")
+        return listOf("usage: create issuer (issuer, dealer, caret, clarity, colour, cut)")
+    }
+
+    override fun description(): String {
+        return "Create a diamond grade report"
     }
 }

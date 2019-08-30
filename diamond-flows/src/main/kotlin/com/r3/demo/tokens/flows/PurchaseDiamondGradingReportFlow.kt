@@ -20,6 +20,7 @@ import net.corda.core.serialization.CordaSerializable
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.unwrap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Implements the purchase token flow.
@@ -35,20 +36,33 @@ class PurchaseDiamondGradingReportFlow(
         private val amount: Amount<TokenType>) : FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
+        val logstart = AtomicLong(System.currentTimeMillis())
+
         val diamondGradingReportRef = getStateReference(serviceHub, DiamondGradingReport::class.java, reportId)
         val diamondGradingReport = diamondGradingReportRef.state.data
         val diamondPointer = diamondGradingReport.toPointer<DiamondGradingReport>()
         val token = diamondPointer issuedBy ourIdentity heldBy buyer
 
+        logTime(serviceHub, logstart, "Purchase initialisation")
+
         val other = initiateFlow(buyer)
+
+        logTime(serviceHub, logstart, "Purchase initiate flow")
 
         // Send the full TokenPointer details to the buyer, this must be
         // available in the buyer's vault
         val tx = serviceHub.validatedTransactions.getTransaction(diamondGradingReportRef.ref.txhash)!!
+
+        logTime(serviceHub, logstart, "Purchase validate transaction")
+
         subFlow(SendTransactionFlow(other, tx))
+
+        logTime(serviceHub, logstart, "Purchase send transaction")
 
         // Send trade details
         other.send(SellerTradeInfo(amount, token, ourIdentity))
+
+        logTime(serviceHub, logstart, "Purchase send trade info")
 
         val signedTransactionFlow = object : SignTransactionFlow(other, SignTransactionFlow.tracker()){
             override fun checkTransaction(stx: SignedTransaction) {
@@ -56,7 +70,11 @@ class PurchaseDiamondGradingReportFlow(
         }
         val txid = subFlow(signedTransactionFlow)
 
+        logTime(serviceHub, logstart, "Purchase sign transaction")
+
         subFlow(IssueTokensFlowHandler(other))
+
+        logTime(serviceHub, logstart, "Purchase issue tokens")
 
         return txid
     }
@@ -66,11 +84,16 @@ class PurchaseDiamondGradingReportFlow(
     class PurchaseDiamondGradingReportFlowResponse (private val flowSession: FlowSession): FlowLogic<Unit>() {
         @Suspendable
         override fun call() {
+            val logstart = AtomicLong(System.currentTimeMillis())
             // Receive and record the TokenPointer
             subFlow(ReceiveTransactionFlow(flowSession, statesToRecord = StatesToRecord.ALL_VISIBLE))
 
+            logTime(serviceHub, logstart, "Purchase receive transaction flow")
+
             // Receive the trade details
             val tradeInfo = flowSession.receive<SellerTradeInfo>().unwrap { it }
+
+            logTime(serviceHub, logstart, "Purchase receive flow session")
 
             val notary = serviceHub.networkMapCache.notaryIdentities.first()
             val builder = TransactionBuilder(notary)
@@ -81,11 +104,21 @@ class PurchaseDiamondGradingReportFlow(
 
             // Sign off the transaction
             val selfSignedTransaction = serviceHub.signInitialTransaction(builder)
+
+            logTime(serviceHub, logstart, "Purchase self sign transaction")
+
             val fullySignedTransaction = subFlow(CollectSignaturesFlow(selfSignedTransaction, listOf(flowSession)))
+
+            logTime(serviceHub, logstart, "Purchase fully sign transaction")
 
             // Notify the notary
             val finalityTransaction = subFlow(ObserverAwareFinalityFlow(fullySignedTransaction, listOf(flowSession)))
+
+            logTime(serviceHub, logstart, "Purchase finality")
+
             subFlow(UpdateDistributionListFlow(finalityTransaction))
+
+            logTime(serviceHub, logstart, "Purchase update distribution")
         }
     }
 

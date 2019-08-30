@@ -20,8 +20,17 @@ data class DiamondGradingReport(
         val cut: String,
         val assessor: Party,
         val requester: Party,
-        override val linearId: UniqueIdentifier = UniqueIdentifier()
+        override val linearId: UniqueIdentifier
 ) : EvolvableTokenType() {
+    @Suppress("unused")
+    constructor(
+            caratWeight: String,
+            color: ColorScale,
+            clarity: ClarityScale,
+            cut: String,
+            assessor: Party,
+            requester: Party) : this(BigDecimal(caratWeight), color, clarity, cut, assessor, requester, UniqueIdentifier())
+    @Suppress("unused")
     constructor(
             caratWeight: String,
             color: ColorScale,
@@ -29,7 +38,7 @@ data class DiamondGradingReport(
             cut: String,
             assessor: Party,
             requester: Party,
-            linearId: UniqueIdentifier = UniqueIdentifier()) : this(BigDecimal(caratWeight), color, clarity, cut, assessor, requester, linearId)
+            linearId: UniqueIdentifier) : this(BigDecimal(caratWeight), color, clarity, cut, assessor, requester, linearId)
 
     @CordaSerializable enum class ColorScale { D, E, F, G, H, I, J, K, L, M, N }
     @CordaSerializable enum class ClarityScale { VVS1, VVS2, VS1, VS2, VI1, VI2 }

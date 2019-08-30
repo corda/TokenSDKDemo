@@ -6,6 +6,7 @@ import com.r3.corda.lib.tokens.workflows.flows.rpc.CreateEvolvableTokens
 import com.r3.demo.tokens.state.DiamondGradingReport
 import net.corda.core.flows.*
 import net.corda.core.transactions.SignedTransaction
+import net.corda.core.utilities.contextLogger
 
 /**
  * Implements the create evolvable token flow.
@@ -18,7 +19,13 @@ class CreateDiamondGradingReportFlow(private val diamondGradingReport: DiamondGr
         val notary = serviceHub.networkMapCache.notaryIdentities.first()
         val transactionState = diamondGradingReport withNotary notary
 
-        return subFlow(CreateEvolvableTokens(transactionState))
+        val logtime = System.currentTimeMillis()
+
+        try {
+            return subFlow(CreateEvolvableTokens(transactionState))
+        } finally {
+            serviceHub.contextLogger().info("TTT - create evolable tokens flow = ${System.currentTimeMillis() - logtime}ms")
+        }
     }
 }
 

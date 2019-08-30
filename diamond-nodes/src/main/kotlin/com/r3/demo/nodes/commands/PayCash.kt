@@ -45,6 +45,10 @@ class PayCash : Command {
         return COMMAND
     }
 
+    override fun description(): String {
+        return "Pay cash between users"
+    }
+
     override fun help(): kotlin.collections.List<String> {
         return listOf("usage: pay-cash payer receiver amount")
     }

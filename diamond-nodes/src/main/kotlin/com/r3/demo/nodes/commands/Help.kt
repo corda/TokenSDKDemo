@@ -21,7 +21,9 @@ class Help  : Command {
     override fun execute(main: Main, array: List<String>, parameters: String): Iterator<String> {
         when (array.size){
             1 -> {
-                return main.commandMap.keys.sorted().listIterator()
+                return main.commandMap.values.map {
+                    command -> "${command.name()}: ${command.description()}"
+                }.sorted().listIterator()
             }
             2 -> {
                 val command = main.commandMap[array[1].toLowerCase()]
@@ -33,6 +35,10 @@ class Help  : Command {
 
     override fun name(): String {
         return COMMAND
+    }
+
+    override fun description(): String {
+        return "Provide help"
     }
 
     override fun help(): List<String> {

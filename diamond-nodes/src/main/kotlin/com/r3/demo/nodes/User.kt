@@ -18,4 +18,16 @@ class User(val main: Main,
     override fun toString(): String {
         return legalName
     }
+
+    fun isIssuer(): Boolean {
+        return legalName.contains("bank", true)
+    }
+
+    fun isCertifier(): Boolean {
+        return legalName.contains("gic", true)
+    }
+
+    fun isDealer(): Boolean {
+        return legalName.contains("dealer", true)
+    }
 }

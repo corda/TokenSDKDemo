@@ -26,6 +26,11 @@ class Purchase : Command {
 
         // Get the user who is meant to invoke the command
         val dealer = main.getUser(array[1])
+
+        if (!dealer.isDealer()){
+            return listOf("Only dealers are allowed to sell diamonds").listIterator()
+        }
+
         val connection = main.getConnection(dealer)
         val service = connection.proxy
         val buyer = main.getWellKnownUser(main.getUser(array[2]), service)
@@ -33,7 +38,11 @@ class Purchase : Command {
 
         val amount = Utilities.getAmount(array[4])
 
+        Utilities.logStart()
+
         service.startTrackedFlow(::PurchaseDiamondGradingReportFlow, linearId, buyer, amount).returnValue.get()
+
+        Utilities.logFinish()
 
         // Display the new list of unconsumed states
         val nodes = Nodes()
@@ -44,6 +53,10 @@ class Purchase : Command {
 
     override fun name(): String {
         return COMMAND
+    }
+
+    override fun description(): String {
+        return "Purchase a diamond token for cash from a report"
     }
 
     override fun help(): kotlin.collections.List<String> {

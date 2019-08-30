@@ -1,6 +1,9 @@
 package com.r3.demo.nodes.commands
 
+import com.r3.corda.lib.tokens.contracts.states.NonFungibleToken
+import com.r3.corda.lib.tokens.contracts.types.TokenPointer
 import com.r3.corda.lib.tokens.contracts.types.TokenType
+import com.r3.corda.lib.tokens.contracts.utilities.holderString
 import com.r3.corda.lib.tokens.money.FiatCurrency
 import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.contracts.Amount
@@ -118,6 +121,30 @@ object Utilities {
 
         return DiamondGradingReport(caret, colour, clarity, cut, issuerParty, requesterParty, linearId)
     }
+
+    var logtime: Long = -1
+
+    fun logStart(){
+        logtime = System.currentTimeMillis()
+    }
+
+    fun logFinish(){
+        logtime = System.currentTimeMillis() - logtime
+    }
+
+    fun logCancel() {
+        logtime = -1
+    }
+}
+
+fun NonFungibleToken.printReport(): String {
+    val text = toString()
+
+    if (text.contains("DiamondGradingReport")){
+        val id = (this.token.tokenType as TokenPointer<*>).tokenIdentifier.toString().substring(0, 8)
+        return "TokenPointer(DiamondGradingReport, ${id}) issued by ${issuer.name.organisation} held by $holderString"
+    }
+    return text
 }
 
 fun DiamondGradingReport.printReport(): String {
@@ -127,7 +154,7 @@ fun DiamondGradingReport.printReport(): String {
     val assessor = if (m1.matches()) m1.group(1) else this.assessor.toString()
     val requester = if (m2.matches()) m2.group(1) else this.requester.toString()
 
-    val builder = StringBuilder(this.linearId.toString()).append(" = (")
+    val builder = StringBuilder("(")
     builder.append(assessor).append(", ")
     builder.append(requester).append(", ")
     builder.append(this.caratWeight).append(", ")
