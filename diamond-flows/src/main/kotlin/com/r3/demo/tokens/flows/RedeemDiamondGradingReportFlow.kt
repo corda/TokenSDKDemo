@@ -1,16 +1,24 @@
 package com.r3.demo.tokens.flows
 
 import co.paralleluniverse.fibers.Suspendable
+import com.r3.corda.lib.accounts.contracts.states.AccountInfo
+import com.r3.corda.lib.accounts.workflows.flows.RequestKeyForAccount
+import com.r3.corda.lib.accounts.workflows.flows.ShareAccountInfo
+import com.r3.corda.lib.accounts.workflows.internal.flows.createKeyForAccount
+import com.r3.corda.lib.ci.workflows.SyncKeyMappingInitiator
 import com.r3.corda.lib.tokens.contracts.states.NonFungibleToken
 import com.r3.corda.lib.tokens.contracts.types.TokenType
 import com.r3.corda.lib.tokens.workflows.internal.flows.finality.ObserverAwareFinalityFlowHandler
 import com.r3.corda.lib.tokens.workflows.flows.move.addMoveFungibleTokens
 import com.r3.corda.lib.tokens.workflows.flows.redeem.addTokensToRedeem
+import com.r3.corda.lib.tokens.workflows.internal.flows.distribution.UpdateDistributionListFlow
 import com.r3.corda.lib.tokens.workflows.internal.flows.finality.ObserverAwareFinalityFlow
 import net.corda.core.contracts.Amount
 import net.corda.core.contracts.UniqueIdentifier
+import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
-import net.corda.core.identity.Party
+import net.corda.core.node.services.Vault
+import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
@@ -18,38 +26,56 @@ import net.corda.core.utilities.unwrap
 
 /**
  * Implements the redeem token flow.
- * The holder of the token wants to redeem the token and receive the payment.
- * The flow is initiated by the holder.
- * The issuer creates the transaction with payment which is then verified by the holder.
+ * The redeemer of the token wants to redeem the token and receive the payment.
+ * The flow is initiated by the redeemer.
+ * The dealer creates the transaction with payment which is then verified by the redeemer.
  */
 @InitiatingFlow
 @StartableByRPC
 class RedeemDiamondGradingReportFlow(
         private val tokenId: UniqueIdentifier,
-        private val issuer: Party,
+        private val redeemer: AccountInfo,
+        private val dealer: AccountInfo,
         private val amount: Amount<TokenType>) : FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
+        requireThat {"Redeemer not hosted on this node" using (redeemer.host == ourIdentity) }
+
+        if (dealer.host == ourIdentity){
+            return RedeemDiamondGradingReportWithinNode().call()
+        }
+
+        val other = initiateFlow(dealer.host)
+
+        // Retrieve the redeemer's account details
+        val redeemerAccount = getStateReference(serviceHub, AccountInfo::class.java, redeemer.linearId)
+
+        // Send redeemer account info to dealer
+        subFlow(ShareAccountInfo(redeemerAccount, listOf(dealer.host)))
+
+        // Retrieve the token to be redeemed
         val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId)
-        val other = initiateFlow(issuer)
+
+        // Send key mappings of token holder to dealer
+        subFlow(SyncKeyMappingInitiator(dealer.host, listOf(original.state.data.holder)))
 
         // Send the state reference for the token being redeemed
         subFlow(SendStateAndRefFlow(other, listOf(original)))
 
         // Send trade details
-        other.send(SellerTradeInfo(amount, ourIdentity))
+        other.send(TradeInfo(dealer, redeemer, amount))
 
-        val signedTransactionFlow = object : SignTransactionFlow(other, SignTransactionFlow.tracker()){
+        val signedTransactionFlow = object : SignTransactionFlow(other, tracker()){
             override fun checkTransaction(stx: SignedTransaction) {
 
             }
         }
 
-        val txid = subFlow(signedTransactionFlow)
+        val txId = subFlow(signedTransactionFlow)
 
         subFlow(ObserverAwareFinalityFlowHandler(other))
 
-        return txid
+        return txId
     }
 
     @Suppress("unused")
@@ -61,27 +87,97 @@ class RedeemDiamondGradingReportFlow(
             val originalToken = subFlow(ReceiveStateAndRefFlow<NonFungibleToken>(flowSession)).single()
 
             // Receive the trade details
-            val tradeInfo = flowSession.receive<SellerTradeInfo>().unwrap { it }
+            val tradeInfo = flowSession.receive<TradeInfo>().unwrap { it }
+
+            val redeemer = tradeInfo.redeemer
+            val dealer = tradeInfo.dealer
+
+            requireThat {"Dealer not hosted on this node" using (dealer.host == ourIdentity) }
+
+            val dealerParty = createKeyForAccount(dealer, serviceHub)
+            val redeemerParty = subFlow(RequestKeyForAccount(redeemer))
+
+            // Define criteria to retrieve only cash from dealer
+            val criteria = QueryCriteria.VaultQueryCriteria(
+                    status = Vault.StateStatus.UNCONSUMED,
+                    externalIds = listOf(dealer.identifier.id)
+            )
 
             val notary = serviceHub.networkMapCache.notaryIdentities.first()
             val builder = TransactionBuilder(notary)
 
-            // Redeem the token and exchange payment
+            // Add payment command from dealer to redeemer
+            addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, redeemerParty, dealerParty, criteria)
+
+            // Create a list of local signatures for the command
+            val signers = builder.commands().first().signers + ourIdentity.owningKey + dealerParty.owningKey
+
+            // Add redeem token command
             addTokensToRedeem(builder, listOf(originalToken), null)
-            addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, tradeInfo.party, ourIdentity, null)
 
             // Sign off the transaction
-            val selfSignedTransaction = serviceHub.signInitialTransaction(builder)
+            val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)
+
+            // Collect remote signatures
             val fullySignedTransaction = subFlow(CollectSignaturesFlow(selfSignedTransaction, listOf(flowSession)))
 
             // Notify the notary
-            subFlow(ObserverAwareFinalityFlow(fullySignedTransaction, listOf(flowSession)))
+            val finalityTransaction = subFlow(ObserverAwareFinalityFlow(fullySignedTransaction, listOf(flowSession)))
+
+            // Update distribution lists
+            subFlow(UpdateDistributionListFlow(finalityTransaction))
+        }
+    }
+
+    /**
+     * Use case where both dealer and redeemer are on the same node
+     */
+    inner class RedeemDiamondGradingReportWithinNode {
+        @Suspendable
+        fun call(): SignedTransaction {
+            val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId)
+
+            val criteria = QueryCriteria.VaultQueryCriteria(
+                    status = Vault.StateStatus.UNCONSUMED,
+                    externalIds = listOf(dealer.identifier.id)
+            )
+
+            val notary = serviceHub.networkMapCache.notaryIdentities.first()
+            val builder = TransactionBuilder(notary)
+
+            val dealerParty = createKeyForAccount(dealer, serviceHub)
+            val redeemerParty = createKeyForAccount(redeemer, serviceHub)
+
+            // Add payment command from dealer to redeemer
+            addMoveFungibleTokens(builder, serviceHub, amount, redeemerParty, dealerParty, criteria)
+
+            // Locate the original signers of the token
+            val originalSigners = original.state.data.participants.map { it.owningKey }
+
+            // Create a list of all local signatures for the command
+            val signers = builder.commands().first().signers +
+                    ourIdentity.owningKey +
+                    dealerParty.owningKey +
+                    redeemerParty.owningKey +
+                    originalSigners
+
+            // Add redeem token command
+            addTokensToRedeem(builder, listOf(original), null)
+
+            val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)
+
+            val finalityTransaction = subFlow(ObserverAwareFinalityFlow(selfSignedTransaction, emptyList()))
+
+            subFlow(UpdateDistributionListFlow(finalityTransaction))
+
+            return selfSignedTransaction
         }
     }
 
     @CordaSerializable
-    data class SellerTradeInfo(
-            val price: Amount<TokenType>,
-            val party: Party
+    data class TradeInfo(
+            val dealer: AccountInfo,
+            val redeemer: AccountInfo,
+            val price: Amount<TokenType>
     )
 }

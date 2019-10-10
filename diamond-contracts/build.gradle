@@ -27,13 +27,6 @@ cordapp {
 
     signing {
         enabled false
-        options {
-            keystore "../cordapp.jks"
-            keypass "cordapp"
-            storepass "cordapp"
-            storetype "PKCS12"
-            alias "cordapp"
-        }
     }
     contract {
         name "Diamond"
@@ -55,8 +48,10 @@ dependencies {
     cordaCompile "$corda_release_group:corda-jackson:$corda_release_version"
     cordaCompile "$corda_release_group:corda-webserver-impl:$corda_release_version"
 
-    cordaCompile "com.r3.corda.lib.tokens:tokens-contracts:1.1-SNAPSHOT"
-    cordaCompile "com.r3.corda.lib.tokens:tokens-workflows:1.1-SNAPSHOT"
+    cordaCompile "$accounts_release_group:accounts-contracts:$accounts_release_version"
+
+    cordaCompile "$tokens_release_group:tokens-contracts:$tokens_release_version"
+    cordaCompile "$tokens_release_group:tokens-workflows:$tokens_release_version"
 
     testCompile "$corda_release_group:corda-test-utils:$corda_release_version"
     testCompile "$corda_release_group:corda-node-driver:$corda_release_version"

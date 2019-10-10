@@ -5,9 +5,9 @@ import com.r3.demo.nodes.Main
 import com.r3.demo.tokens.flows.RedeemDiamondGradingReportFlow
 
 /**
- * Implement the issue command
+ * Implement the redeem command
  */
-class Redeem : Command {
+class RedeemDiamond : Command {
     companion object {
         const val COMMAND = "redeem"
     }
@@ -25,23 +25,24 @@ class Redeem : Command {
         }
 
         // Get the user who is meant to invoke the command
-        val user = main.getUser(array[1])
-        val connection = main.getConnection(user)
+        val owner = main.retrieveAccount(array[1])
+        val dealer = main.retrieveAccount(array[2])
+        val node = main.retrieveNode(owner)
+        val connection = main.getConnection(node)
         val service = connection.proxy
-        val issuer = main.getWellKnownUser(main.getUser(array[2]), service)
-        val tokenId = main.retrieveNode(array[3]) ?: throw IllegalArgumentException("Token ID ${array[3]} not found")
+        val tokenId = main.retrieveState(array[3]) ?: throw IllegalArgumentException("Token ID ${array[3]} not found")
 
         val amount = Utilities.getAmount(array[4])
 
         Utilities.logStart()
 
-        service.startTrackedFlow(::RedeemDiamondGradingReportFlow, tokenId, issuer, amount).returnValue.get()
+        service.startTrackedFlow(::RedeemDiamondGradingReportFlow, tokenId, owner, dealer, amount).returnValue.get()
 
         Utilities.logFinish()
 
         // Display the new list of unconsumed states
-        val nodes = Nodes()
-        val text = "nodes ${array[1]}"
+        val nodes = ListAccount()
+        val text = "list ${array[1]}"
 
         return nodes.execute(main, text.split(" "), text)
     }

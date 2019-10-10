@@ -1,13 +1,18 @@
 package com.r3.demo.tokens.flows
 
 import co.paralleluniverse.fibers.Suspendable
+import com.r3.corda.lib.accounts.contracts.states.AccountInfo
+import com.r3.corda.lib.accounts.workflows.flows.RequestKeyForAccount
+import com.r3.corda.lib.accounts.workflows.internal.flows.createKeyForAccount
 import com.r3.corda.lib.tokens.contracts.types.TokenType
 import com.r3.corda.lib.tokens.workflows.flows.move.MoveTokensFlowHandler
 import com.r3.corda.lib.tokens.workflows.internal.flows.finality.ObserverAwareFinalityFlow
 import com.r3.corda.lib.tokens.workflows.flows.move.addMoveFungibleTokens
 import net.corda.core.contracts.Amount
+import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
-import net.corda.core.identity.Party
+import net.corda.core.node.services.Vault
+import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 
@@ -17,22 +22,47 @@ import net.corda.core.transactions.TransactionBuilder
 @InitiatingFlow
 @StartableByRPC
 class CashTransferFlow(
-        private val buyer: Party,
+        private val payer: AccountInfo,
+        private val buyer: AccountInfo,
         private val amount: Amount<TokenType>) : FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
+        requireThat {"Payer not hosted on this node" using (payer.host == ourIdentity) }
+
         val notary = serviceHub.networkMapCache.notaryIdentities.first()
         val builder = TransactionBuilder(notary)
 
-        addMoveFungibleTokens(builder, serviceHub, amount, buyer, ourIdentity, null)
+        // Create a payer party to receive any change from the transfer
+        val payerParty = createKeyForAccount(payer, serviceHub)
 
-        val others = listOf( ourIdentity ).map{ party -> initiateFlow(party) }
-        val flows = listOf( ourIdentity, buyer ).map{ party -> initiateFlow(party) }
+        // Create a buyer party for the transaction. If buyer not on this
+        // node then use the sub-flow to generate the party
+        val buyerParty =
+                if (buyer.host == ourIdentity) {
+                    createKeyForAccount(buyer, serviceHub)
+                } else {
+                    subFlow(RequestKeyForAccount(buyer))
+                }
 
-        val selfSignedTransaction = serviceHub.signInitialTransaction(builder)
-        val fullySignedTransaction = subFlow(CollectSignaturesFlow(selfSignedTransaction, others))
+        // Define criteria to retrieve only cash from payer
+        val criteria = QueryCriteria.VaultQueryCriteria(
+                status = Vault.StateStatus.UNCONSUMED,
+                externalIds = listOf(payer.identifier.id)
+        )
 
-        return subFlow(ObserverAwareFinalityFlow(fullySignedTransaction, flows))
+        // Build transaction to pay the buyer based on the criteria, giving the change to the payer
+        addMoveFungibleTokens(builder, serviceHub, amount, buyerParty, payerParty, criteria)
+
+        // Retrieve the list of signers for the transaction
+        val signers = builder.commands().first().signers + ourIdentity.owningKey
+
+        // Self sign the transaction with signatures found on the command
+        val signedTransaction = serviceHub.signInitialTransaction(builder, signers)
+
+        val flow = initiateFlow(buyer.host)
+        val flows = listOf(flow)
+
+        return subFlow(ObserverAwareFinalityFlow(signedTransaction, flows))
     }
 
     @Suppress("unused")

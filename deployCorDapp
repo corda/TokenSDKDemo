@@ -1,8 +1,7 @@
 #!/bin/sh
 
 cd build/nodes
-for i in GIC Alice Bob Charlie Dealer ; do
+for i in GIC Bank AAA BBB ; do
     cp ../../diamond-contracts/build/libs/*.jar $i/cordapps
     cp ../../diamond-flows/build/libs/*.jar $i/cordapps
-    cp ../../vault-explorer/build/libs/*.jar $i/cordapps
 done

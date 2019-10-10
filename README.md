@@ -1,21 +1,31 @@
-# Token SDK Demo - Delivery vs Payment
+# Token Accounts SDK Demo - Delivery vs Payment
 
 ## Overview
 
-This sample code project demonstrates how the Token SDK can be used in a delivery vs payment scenario.
-In this scenario a diamond dealer registers diamonds with a diamond grading authority and sells the diamonds
-to customers. The customers can sell the diamond token to other customers. The diamond grading authority can
+This sample code project demonstrates how the Tokens and Accounts SDKs can be used in a delivery vs payment scenario.
+In this scenario diamond dealers register diamonds with a diamond grading authority and then sell the diamonds
+to customers. The customers can sell the diamond tokens on to other customers. The diamond grading authority can
 later change the diamond grading. Any evolution in the diamond grade report is seen by the current holder of
 the token. Later the diamond token can be redeemed for cash.
 
 ### Actors (Corda Nodes)
 
-* GIC - Diamond grading authority
-* Bank - Cash issuing authority
-* Dealer - Diamond dealer
-* Alice - Diamond buyer/seller
-* Bob - Diamond buyer/seller
-* Charlie - Diamond buyer/seller
+* GIC - Diamond grading authority node
+* Bank - Cash issuing authority node
+* AAA - A diamond dealer/repository node
+* BBB - A diamond dealer/repository node
+* Notary - Network notary
+
+### Actors (Accounts)
+
+Diamond dealers and traders are represented as accounts on the dealer nodes. These accounts are created
+using the com.r3.corda.lib.accounts.workflows.flows.CreateAccount workflow, which can be invoked using
+the demo client.
+
+In this scenario each dealer node (AAA, BBB) will have an account of the same name created on
+the node. This is so that money for the dealer can be kept separate from money for clients (Alice, Bob etc.)
+
+In this demo the account name is assumed to be unique across all nodes.
 
 ## Build and Execution
 
@@ -26,81 +36,109 @@ The following steps can be used to build the application, run the nodes and star
     ./build/nodes/runnodes
     java -jar diamond-nodes/build/libs/shell-nodes-0.1.jar
 
-The current build.gradle assumes the Token SDK is version 1.1-SNAPSHOT.
+The current build.gradle uses the following releases
 
-    cordapp "com.r3.corda.lib.tokens:tokens-contracts:1.1-SNAPSHOT"
-    cordapp "com.r3.corda.lib.tokens:tokens--workflows:1.1-SNAPSHOT"
-    cordapp "com.r3.corda.lib.tokens:tokens--money:1.1-SNAPSHOT"
+    corda_release_group = 'net.corda'
+    corda_release_version = '4.3-RC01'
+    tokens_release_group = 'com.r3.corda.lib.tokens'
+    tokens_release_version = '1.1-RC01'
+    accounts_release_group = 'com.r3.corda.lib.accounts'
+    accounts_release_version = '1.0-RC03'
+    confidential_id_release_group = "com.r3.corda.lib.ci"
+    confidential_id_release_version = "1.0-RC03"
 
 ## RPC Client Commands
 
-The RPC client application can be used to start flows on the Corda nodes. The general syntax of a command is
+The RPC demo client can be used to start flows on the Corda nodes. The general syntax of a command is
 
     <command> <node> arguments ...
+    <command> <account> arguments ...
 
-Where node is one of GIC, Bank, Dealer, Alice, Bob or Charlie.
+Where node is one of GIC, Bank, AAA, BBB and account is an account created using the demo client.
 
 ### help [command]
 
 Display all commands, or the syntax of the given command
 
-### issue-cash issuer receiver amount
+### create-account node name
 
-Issue cash to the receiver. The amount should be in whole units with a three letter currency code.
-The symbols $, A$ and S$ can be used for USD, AUD and SGD respectively.
+Creates an account on a dealer node. Typically you should create an account for the dealer itself,
+followed by accounts for each of their clients. Only dealer nodes can create accounts.
+
+    create-account AAA AAA
+    create-account AAA Alice
+    
+### load-accounts node
+
+Loads the existing account names from a node and records them on the demo client. This command is needed
+after restarting the demo client so that the client knows where the accounts are hosted.
+
+    load-accounts AAA
+    
+### issue-cash issuer account amount
+
+Issue cash to an account. The amount should be in whole units with a three letter currency code.
+The symbols $, A$ and S$ can be used for USD, AUD and SGD respectively. Only banks can issue cash.
 
     issue-cash Bank Alice $1000
 
 ### pay-cash payer payee amount
 
-Transfer money from payer to payee
+Transfer money from payer to payee.
 
     pay-cash Alice Bob $500
 
 ### reissue-cash issuer payee amount
 
-Return your money to the bank and receive new tokens
+Return your money to the bank and receive new tokens.
 
     reissue-cash Bank Bob $500
 
-### list user
+### list account
 
-List the unused fungible and non fungible tokens on a user's vault.
+List the unused fungible and non fungible tokens on an account's vault.
 
     list Alice
 
-This command is needed to retrieve the token-ids abd report-ids used in other commands.
+This command is needed to retrieve the token-ids used by other commands.
 
-### create authority (accessor, dealer, carets, clarity, colour, cut)
+### create-report authority (accessor, dealer, carets, clarity, colour, cut)
 
-Create a diamond grade report. This will be recorded as an evolvable token on dealer's vault.
+Create a diamond grade report. This will be recorded as an evolvable token on dealer's node.
 Carets should be a decimal number. Clarity one of VVS1, VVS2, VS1, VS2, VI1, VI2. Colour from D to N.
 
-    create GIC (GIC, Dealer, 1.0, VVS1, D, 'oval')
+    create GIC (GIC, AAA, 1.0, VVS1, D, 'oval')
 
 This command will return the report-id which should be used in the purchase and update commands.
 
-### update authority report-id (accessor, dealer, carets, clarity, colour, cut)
+### update-report authority report-id (accessor, dealer, carets, clarity, colour, cut)
 
 Update a diamond grade report.
 
-    update GIC abcd (GIC, Dealer, 0.99, VVS1, E, 'oval')
+    update GIC abcd (GIC, AAA, 0.99, VVS1, E, 'oval')
 
 The report-id can be any identifiable prefix of a valid report-id.
+
+### reports node
+
+List the reports created on a node.
+
+    reports GIC
+    reports AAA
+
+This command is needed to retrieve the report-ids used by other commands.
 
 ### purchase dealer buyer report-id amount
 
 Purchase a diamond from a dealer. This will create a non-fungible token in the buyer's vault.
-The report-id given on the command line can be a prefix of the linear-id used to record the diamond grade report.
+The report-id given on the command line can be a prefix of the linear-id of the diamond grade report.
 
-    purchase Dealer Alice abcd $350
-
-To find the token-id of the new NFT use the list command on the buyer's vault.
+    purchase AAA Alice abcd $350
 
 ### transfer seller buyer token-id amount
 
-Sell a diamond token between users. The token-id can be obtained by using the list command.
-The token-id given on the command line can be a prefix of the token-id used to record the diamond token.
+Sell a diamond token between accounts. The token-id can be obtained by using the list command.
+The token-id given on the command line can be a prefix of the linear-id of the diamond token.
 
     transfer Alice Bob 1234 $550
 
@@ -108,7 +146,7 @@ The token-id given on the command line can be a prefix of the token-id used to r
 
 Redeem the diamond token for payment.
 
-    redeem Bob Dealer 1234 $450
+    redeem Bob AAA 1234 $450
 
 ### bye
 
@@ -116,9 +154,17 @@ Exit the client
 
 ## Walk-through
 
-The following is a walk through of the buying/selling process. (The linear-id have been edited to help it fit on a screen).
+The following is a walk through of the buying/selling process.
 
     $ java -jar diamond-nodes/build/libs/shell-nodes-0.1.jar
+    > create-account AAA AAA
+    AAA on [OU=Dealer, O=AAA, L=Sydney, C=AU] with id 48832117-58a1-4ab1-be2d-312b1640d95d
+    > create-account AAA Alice
+    Alice on [OU=Dealer, O=AAA, L=Sydney, C=AU] with id b162581b-a104-41fc-9dfd-6c4c733b3d42
+    > create-account AAA Bob
+    Bob on [OU=Dealer, O=AAA, L=Sydney, C=AU] with id 774cd01f-f17a-429f-b536-71755dc09098
+    > create-account BBB Charlie
+    Charlie on [OU=Dealer, O=BBB, L=Sydney, C=AU] with id 14eea2d6-f092-4aa7-ae80-f03b978257fd
     > issue-cash Bank Alice $1000
     SignedTransaction(id=97647B868BF07FB5AA7121F55AF1F6A2CE406E6CF0ECEC54547013ACAD745E23)
     > issue-cash Bank Bob $1000
@@ -126,57 +172,48 @@ The following is a walk through of the buying/selling process. (The linear-id ha
     > issue-cash Bank Charlie $1000
     SignedTransaction(id=BCB74A1E4EBF592C0B4139ADD8551C4986C7C50F44CD014297801B1417A649A2)
     > list Alice
-    1000.00 USD issued by GIC owned by Alice
+    1000.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DLDoPWXDGAnXwyU3
     > list Bob
-    1000.00 USD issued by GIC owned by Bob
+    1000.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DL6AFcBZkoCeJvaw
     > list Charlie
-    1000.00 USD issued by GIC owned by Charlie
-    > create GIC (GIC, Dealer, 1.0, VVS1, D, 'oval')
-    3368dd92 = (GIC, Dealer, 1.0, VVS1, D, 'oval')
-    > purchase Dealer Alice 3368 $550
-    3368dd92 = (GIC, Dealer, 1.0, VVS1, D, 'oval')
-    550.00 USD issued by GIC owned by Dealer
+    1000.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DL33V2878sGPNcji
+    > create-report GIC (GIC, AAA, 1.0, VVS1, D, 'oval')
+    b599f218-80b5-4e9d-98e5-95ba25d9da9a
+    > reports AAA
+    b599f218 = (GIC, AAA, 1.0, VVS1, D, 'oval')
+    > purchase AAA Alice b599f218 $550
+    550.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DLF2kqr2VPakJbmv
     > list Alice
-    3368dd92 = (GIC, Dealer, 1.0, VVS1, D, 'oval')
-    407033aa = (TokenPointer(class DiamondGradingReport, 3368dd92) issued by Dealer owned by Alice)
-    450.00 USD issued by GIC owned by Alice
-    > transfer Alice Bob 4070 $600
-    3368dd92 = (GIC, Dealer, 1.0, VVS1, D, 'oval')
-    450.00 USD issued by GIC owned by Alice
-    600.00 USD issued by GIC owned by Alice
-    > list Alice
-    3368dd92 = (GIC, Dealer, 1.0, VVS1, D, 'oval')
-    450.00 USD issued by GIC owned by Alice
-    600.00 USD issued by GIC owned by Alice
+    348b66a6 = (TokenPointer(DiamondGradingReport, b599f218) issued by AAA held by DL6BFnAYerbhRULH)
+    450.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DL6BFnAYerbhRULH
+    > transfer Alice Bob 348b66a6 $600
+    450.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DL6BFnAYerbhRULH
+    600.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DLBrre4W6NsokuDu
     > list Bob
-    3368dd92 = (GIC, Dealer, 1.0, VVS1, D, 'oval')
-    407033aa = (TokenPointer(class DiamondGradingReport, 3368dd92) issued by Dealer owned by Bob)
-    400.00 USD issued by GIC owned by Bob
+    348b66a6 = (TokenPointer(DiamondGradingReport, b599f218) issued by AAA held by DL6MtFq3LgntJGEF)
+    400.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DL6MtFq3LgntJGEF
     > transfer Bob Charlie 4070 $575
-    3368dd92 = (GIC, Dealer, 1.0, VVS1, D, 'oval')
-    400.00 USD issued by GIC owned by Bob
-    575.00 USD issued by GIC owned by Bob
+    400.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DL6MtFq3LgntJGEF
+    575.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DL9ssSv5gG8A3Ecy
     > list Charlie
-    3368dd92 = (GIC, Dealer, 1.0, VVS1, D, 'oval')
-    407033aa = (TokenPointer(class DiamondGradingReport, 3368dd92) issued by Dealer owned by Charlie)
-    425.00 USD issued by GIC owned by Charlie
-    > update GIC 3368 (GIC, Dealer, 0.9, VVS2, D, 'oval')
-    3368dd92 = (GIC, Dealer, 0.9, VVS2, D, 'oval')
-    > list Charlie
-    3368dd92 = (GIC, Dealer, 0.9, VVS2, D, 'oval')
-    407033aa = (TokenPointer(class DiamondGradingReport, 3368dd92) issued by Dealer owned by Charlie)
-    425.00 USD issued by GIC owned by Charlie
+    348b66a6 = (TokenPointer(DiamondGradingReport, b599f218) issued by AAA held by DL8aR91MY94vU8Vq)
+    425.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DL8aR91MY94vU8Vq
+    > update-report GIC b599f218 (GIC, AAA, 1.0, VVS2, D, 'oval')
+    b599f218-80b5-4e9d-98e5-95ba25d9da9a
+    > reports AAA
+    b599f218 = (GIC, AAA, 1.0, VVS2, D, 'oval')
+    > reports BBB
+    b599f218 = (GIC, AAA, 1.0, VVS2, D, 'oval')
+    > redeem Charlie AAA 348b66a6 $450
+    425.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DL8aR91MY94vU8Vq
+    450.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DLGkEwmpv3SS29Vs
+    > list AAA
+    100.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DL9JhdqwLGLgdcbM
     > list Alice
-    3368dd92 = (GIC, Dealer, 1.0, VVS1, D, 'oval')
-    450.00 USD issued by GIC owned by Alice
-    600.00 USD issued by GIC owned by Alice
-    > redeem Charlie Dealer 4070 $550
-    3368dd92 = (GIC, Dealer, 0.9, VVS2, D, 'oval')
-    425.00 USD issued by GIC owned by Charlie
-    550.00 USD issued by GIC owned by Charlie
-    > list Charlie
-    3368dd92 = (GIC, Dealer, 0.9, VVS2, D, 'oval')
-    425.00 USD issued by GIC owned by Charlie
-    550.00 USD issued by GIC owned by Charlie
-    > list Dealer
-    3368dd92 = (GIC, Dealer, 0.9, VVS2, D, 'oval')
+    450.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DL6BFnAYerbhRULH
+    600.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DLBrre4W6NsokuDu
+    > reissue-cash Bank Alice $1050
+    SignedTransaction(id=2149578188C8DFC847925A5483BC39EAE93FF4BDB0259A65E78AFBD56E97BDF1)
+    > list Alice
+    1050.00 TokenType(tokenIdentifier='USD', fractionDigits=2) issued by Bank held by DL42uaq31F2UcQdX
+    > bye

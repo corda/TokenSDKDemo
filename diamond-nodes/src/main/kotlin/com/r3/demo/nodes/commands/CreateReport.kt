@@ -1,16 +1,17 @@
 package com.r3.demo.nodes.commands
 
+import com.r3.corda.lib.tokens.contracts.states.NonFungibleToken
 import net.corda.core.messaging.startTrackedFlow
 import com.r3.demo.tokens.flows.CreateDiamondGradingReportFlow
 import com.r3.demo.nodes.Main
-import com.r3.demo.nodes.User
+import com.r3.demo.tokens.state.DiamondGradingReport
 
 /**
  * Implement the issue command
  */
-class Create : Command {
+class CreateReport : Command {
     companion object {
-        const val COMMAND = "create"
+        const val COMMAND = "create-report"
     }
 
     /**
@@ -28,35 +29,36 @@ class Create : Command {
         }
 
         // Get the user who is meant to invoke the command
-        val user = main.getUser(array[1])
+        val node = main.retrieveNode(array[1])
 
-        if (!user.isCertifier()){
+        if (!node.isCertifier()){
             return listOf("Only graders are allowed to create reports").listIterator()
         }
 
-        val connection = main.getConnection(user)
+        val connection = main.getConnection(node)
         val service = connection.proxy
         val report = Utilities.parseReport(main, service, parameters)
 
         Utilities.logStart()
 
-        service.startTrackedFlow(::CreateDiamondGradingReportFlow, report).returnValue.get()
+        val tx = service.startTrackedFlow(::CreateDiamondGradingReportFlow, report).returnValue.get()
 
         Utilities.logFinish()
 
-        // Display the new list of unconsumed states
-        val nodes = Nodes()
-        val text = "nodes ${array[1]}"
+        val list = tx.tx.outputStates.filterIsInstance(DiamondGradingReport::class.java)
+                .map { it.linearId }
+                .onEach { main.registerState(it.toString(), it) }
+                .map { it.toString() }
 
-        return nodes.execute(main, text.split(" "), text)
+        return list.listIterator()
     }
 
     override fun name(): String {
         return COMMAND
     }
 
-    override fun help(): kotlin.collections.List<String> {
-        return listOf("usage: create issuer (issuer, dealer, caret, clarity, colour, cut)")
+    override fun help(): List<String> {
+        return listOf("usage: create-report issuer (issuer, dealer, caret, clarity, colour, cut)")
     }
 
     override fun description(): String {

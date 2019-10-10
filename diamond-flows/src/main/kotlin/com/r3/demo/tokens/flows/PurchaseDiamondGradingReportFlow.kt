@@ -1,7 +1,10 @@
 package com.r3.demo.tokens.flows
 
 import co.paralleluniverse.fibers.Suspendable
-import com.r3.corda.lib.tokens.contracts.states.NonFungibleToken
+import com.r3.corda.lib.accounts.contracts.states.AccountInfo
+import com.r3.corda.lib.accounts.workflows.flows.RequestKeyForAccount
+import com.r3.corda.lib.accounts.workflows.internal.flows.createKeyForAccount
+import com.r3.corda.lib.tokens.contracts.types.IssuedTokenType
 import com.r3.corda.lib.tokens.contracts.types.TokenType
 import com.r3.corda.lib.tokens.contracts.utilities.issuedBy
 import com.r3.corda.lib.tokens.workflows.flows.issue.IssueTokensFlowHandler
@@ -13,70 +16,63 @@ import com.r3.corda.lib.tokens.workflows.utilities.heldBy
 import com.r3.demo.tokens.state.DiamondGradingReport
 import net.corda.core.contracts.Amount
 import net.corda.core.contracts.UniqueIdentifier
+import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
-import net.corda.core.identity.Party
 import net.corda.core.node.StatesToRecord
+import net.corda.core.node.services.Vault
+import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.unwrap
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Implements the purchase token flow.
- * The buyer wants buy a token from an issuer and provides the payment.
- * The flow is initiated by the issuer.
- * The buyer creates the transaction with payment which is then verified by the issuer.
+ * The buyer wants buy a token from a dealer and provides the payment.
+ * The flow is initiated on the dealer's node.
+ * The buyer creates the transaction with payment which is then verified by the dealer.
  */
 @InitiatingFlow
 @StartableByRPC
 class PurchaseDiamondGradingReportFlow(
         private val reportId: UniqueIdentifier,
-        private val buyer: Party,
+        private val dealer: AccountInfo,
+        private val buyer: AccountInfo,
         private val amount: Amount<TokenType>) : FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
-        val logstart = AtomicLong(System.currentTimeMillis())
+        requireThat { "Dealer not hosted on this node" using (dealer.host == ourIdentity) }
+
+        if (buyer.host == ourIdentity){
+            return PurchaseDiamondGradingReportWithinNode().call()
+        }
 
         val diamondGradingReportRef = getStateReference(serviceHub, DiamondGradingReport::class.java, reportId)
         val diamondGradingReport = diamondGradingReportRef.state.data
         val diamondPointer = diamondGradingReport.toPointer<DiamondGradingReport>()
-        val token = diamondPointer issuedBy ourIdentity heldBy buyer
+        val token = diamondPointer issuedBy ourIdentity //heldBy buyerParty
 
-        logTime(serviceHub, logstart, "Purchase initialisation")
-
-        val other = initiateFlow(buyer)
-
-        logTime(serviceHub, logstart, "Purchase initiate flow")
+        val other = initiateFlow(buyer.host)
 
         // Send the full TokenPointer details to the buyer, this must be
         // available in the buyer's vault
         val tx = serviceHub.validatedTransactions.getTransaction(diamondGradingReportRef.ref.txhash)!!
 
-        logTime(serviceHub, logstart, "Purchase validate transaction")
-
         subFlow(SendTransactionFlow(other, tx))
 
-        logTime(serviceHub, logstart, "Purchase send transaction")
-
         // Send trade details
-        other.send(SellerTradeInfo(amount, token, ourIdentity))
+        other.send(TradeInfo(dealer, buyer, amount, token))
 
-        logTime(serviceHub, logstart, "Purchase send trade info")
-
-        val signedTransactionFlow = object : SignTransactionFlow(other, SignTransactionFlow.tracker()){
+        val signedTransactionFlow = object : SignTransactionFlow(other, tracker()) {
             override fun checkTransaction(stx: SignedTransaction) {
+
             }
         }
-        val txid = subFlow(signedTransactionFlow)
-
-        logTime(serviceHub, logstart, "Purchase sign transaction")
+        val txId = subFlow(signedTransactionFlow)
 
         subFlow(IssueTokensFlowHandler(other))
 
-        logTime(serviceHub, logstart, "Purchase issue tokens")
-
-        return txid
+        return txId
     }
 
     @Suppress("unused")
@@ -84,50 +80,96 @@ class PurchaseDiamondGradingReportFlow(
     class PurchaseDiamondGradingReportFlowResponse (private val flowSession: FlowSession): FlowLogic<Unit>() {
         @Suspendable
         override fun call() {
-            val logstart = AtomicLong(System.currentTimeMillis())
             // Receive and record the TokenPointer
             subFlow(ReceiveTransactionFlow(flowSession, statesToRecord = StatesToRecord.ALL_VISIBLE))
 
-            logTime(serviceHub, logstart, "Purchase receive transaction flow")
-
             // Receive the trade details
-            val tradeInfo = flowSession.receive<SellerTradeInfo>().unwrap { it }
+            val tradeInfo = flowSession.receive<TradeInfo>().unwrap { it }
 
-            logTime(serviceHub, logstart, "Purchase receive flow session")
+            val dealer = tradeInfo.dealer
+            val buyer = tradeInfo.buyer
+
+            requireThat {"Buyer not hosted on this node" using (buyer.host == ourIdentity) }
+
+            val dealerParty = subFlow(RequestKeyForAccount(dealer))
+            val buyerParty = createKeyForAccount(buyer, serviceHub)
+
+            // Define criteria to retrieve only cash from payer
+            val criteria = QueryCriteria.VaultQueryCriteria(
+                    status = Vault.StateStatus.UNCONSUMED,
+                    externalIds = listOf(buyer.identifier.id)
+            )
 
             val notary = serviceHub.networkMapCache.notaryIdentities.first()
             val builder = TransactionBuilder(notary)
 
+            // Add the money for the transaction
+            addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, dealerParty, buyerParty, criteria)
+
+            val signers = builder.commands().first().signers + ourIdentity.owningKey + buyerParty.owningKey
+
             // Issue the token and exchange payment
-            addIssueTokens(builder, listOf(tradeInfo.token))
-            addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, tradeInfo.party, ourIdentity, null)
+            addIssueTokens(builder, listOf(tradeInfo.token heldBy buyerParty))
 
             // Sign off the transaction
-            val selfSignedTransaction = serviceHub.signInitialTransaction(builder)
-
-            logTime(serviceHub, logstart, "Purchase self sign transaction")
+            val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)
 
             val fullySignedTransaction = subFlow(CollectSignaturesFlow(selfSignedTransaction, listOf(flowSession)))
-
-            logTime(serviceHub, logstart, "Purchase fully sign transaction")
 
             // Notify the notary
             val finalityTransaction = subFlow(ObserverAwareFinalityFlow(fullySignedTransaction, listOf(flowSession)))
 
-            logTime(serviceHub, logstart, "Purchase finality")
-
             subFlow(UpdateDistributionListFlow(finalityTransaction))
+        }
+    }
 
-            logTime(serviceHub, logstart, "Purchase update distribution")
+    /**
+     * Use case where both dealer and buyer are on the same node
+     */
+    inner class PurchaseDiamondGradingReportWithinNode {
+        @Suspendable
+        fun call(): SignedTransaction {
+            // Create a dealer party for the transaction
+            val dealerParty = createKeyForAccount(dealer, serviceHub)
+
+            // Create a buyer party for the transaction
+            val buyerParty = createKeyForAccount(buyer, serviceHub)
+
+            val diamondGradingReportRef = getStateReference(serviceHub, DiamondGradingReport::class.java, reportId)
+            val diamondGradingReport = diamondGradingReportRef.state.data
+            val diamondPointer = diamondGradingReport.toPointer<DiamondGradingReport>()
+            val token = diamondPointer issuedBy ourIdentity heldBy buyerParty
+
+            val criteria = QueryCriteria.VaultQueryCriteria(
+                    status = Vault.StateStatus.UNCONSUMED,
+                    externalIds = listOf(buyer.identifier.id)
+            )
+
+            val notary = serviceHub.networkMapCache.notaryIdentities.first()
+            val builder = TransactionBuilder(notary)
+
+            // Add the money for the transaction
+            addMoveFungibleTokens(builder, serviceHub, amount, dealerParty, buyerParty, criteria)
+
+            val signers = builder.commands().first().signers + ourIdentity.owningKey + dealerParty.owningKey + buyerParty.owningKey
+
+            // Issue the token and exchange payment
+            addIssueTokens(builder, listOf(token))
+
+            // Sign off the transaction
+            val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)
+
+            subFlow(ObserverAwareFinalityFlow(selfSignedTransaction, emptyList()))
+
+            return selfSignedTransaction
         }
     }
 
     @CordaSerializable
-    data class SellerTradeInfo(
+    data class TradeInfo(
+            val dealer: AccountInfo,
+            val buyer: AccountInfo,
             val price: Amount<TokenType>,
-            val token: NonFungibleToken,
-            val party: Party
+            val token: IssuedTokenType
     )
 }
-
-

@@ -1,5 +1,6 @@
 package com.r3.demo.nodes
 
+import com.r3.corda.lib.accounts.contracts.states.AccountInfo
 import com.r3.demo.nodes.commands.*
 import net.corda.client.rpc.CordaRPCConnection
 import net.corda.client.rpc.CordaRPCClient
@@ -45,13 +46,13 @@ fun main(args: Array<String>) {
 
     val main = Main(configRoot)
 
-    if (main.userMap.isEmpty()){
-        System.err.println("No users found in ${if (configRoot == ".") "current directory" else configRoot}")
+    if (main.nodeMap.isEmpty()){
+        System.err.println("No nodes found in ${if (configRoot == ".") "current directory" else configRoot}")
         usage()
     }
 
     if (!silent){
-        println(main.userMap)
+        println(main.nodeMap)
     }
 
     val reader = createInputStream(filename)
@@ -122,14 +123,14 @@ class Main(configRoot: String) {
     private val addressPattern = Pattern.compile("address\"?[\\s=:]+\"([^\"]+)\"")
 
     private val connectionMap = HashMap<String, CordaRPCConnection>()
-    private val nodeMap = HashMap<String, UniqueIdentifier>()
+    private val accountMap = HashMap<String, AccountInfo>()
+    private val stateMap = HashMap<String, UniqueIdentifier>()
 
-    val userMap = readConfiguration(configRoot)
+    val nodeMap = readConfiguration(configRoot)
     val commandMap = createCommandMap()
-//    val context = createExecutionContext()
 
     /**
-     * Retrive the [Command] implementation for the command and execute it.
+     * Retrieve the [Command] implementation for the command and execute it.
      */
     fun parseCommand(command: String, array: List<String>, line: String): Iterator<String> {
         val processor = commandMap[command] ?: return listOf("Unknown command ${command}. Type help for help").listIterator()
@@ -142,51 +143,79 @@ class Main(configRoot: String) {
     }
 
     /**
-     * Map the user name to the [User] object
+     * Map the name to the [Node] object
      */
-    fun getUser(name: String): User {
-        return userMap[name] ?: throw IllegalArgumentException("Unknown user ${name}")
+    fun retrieveNode(name: String): Node {
+        return nodeMap[name.toLowerCase()] ?: throw IllegalArgumentException("Unknown node ${name}")
     }
 
     /**
-     * Return the RPC connection for the [User] object
+     * Register a [Node] to a legal name
      */
-    fun getConnection(user: User): RPCConnection<CordaRPCOps> {
-        if (!connectionMap.containsKey(user.name)){
-            val nodeAddress = NetworkHostAndPort.parse(user.address)
+    fun registerNode(name: AccountInfo, node: Node){
+        nodeMap[name.host.name.toString()] = node
+    }
+
+    /**
+     * Map the name to the [Node] object
+     */
+    fun retrieveNode(name: AccountInfo): Node {
+        return nodeMap[name.host.name.toString()] ?: throw IllegalArgumentException("Unknown node ${name.name}")
+    }
+
+    /**
+     * Return the RPC connection for the [Node] object
+     */
+    fun getConnection(node: Node): RPCConnection<CordaRPCOps> {
+        if (!connectionMap.containsKey(node.name)){
+            val nodeAddress = NetworkHostAndPort.parse(node.address)
             val client = CordaRPCClient(nodeAddress)
-            val connection = client.start(user.username, user.password)
+            val connection = client.start(node.username, node.password)
 
-            connectionMap[user.name] = connection
+            connectionMap[node.name] = connection
         }
-        return connectionMap[user.name] ?: throw IllegalArgumentException("Unknown connection ${user.name}")
+        return connectionMap[node.name] ?: throw IllegalArgumentException("Unknown connection ${node.name}")
     }
 
     /**
-     * Translate the user name to the X500 name. The user name is obtained from the
+     * Translate the node name to the X500 name. The node name is obtained from the
      * name of the directory containing the node.conf file, while the X500 name is based
      * on the legal name.
      */
-    fun getWellKnownUser(user: User, service: CordaRPCOps): Party {
-        return service.wellKnownPartyFromX500Name(CordaX500Name.parse(user.legalName)) ?: throw IllegalArgumentException("Unknown party name ${user.name}.")
+    fun getWellKnownUser(node: Node, service: CordaRPCOps): Party {
+        return service.wellKnownPartyFromX500Name(CordaX500Name.parse(node.legalName)) ?: throw IllegalArgumentException("Unknown party name ${node.name}.")
+    }
+
+    /**
+     * Record the buyer info for an buyer name
+     */
+    fun registerAccount(name:String, account: AccountInfo) {
+        accountMap[name.toLowerCase()] = account
+    }
+
+    /**
+     * Retrieve the buyer info of an buyer
+     */
+    fun retrieveAccount(name: String): AccountInfo {
+        return accountMap[name.toLowerCase()] ?: throw IllegalArgumentException("Unknown account ${name}")
     }
 
     /**
      * Record the linear id of a state so that it can be referred to by name
      */
-    fun registerNode(name:String, linearId: UniqueIdentifier){
-        nodeMap[name] = linearId
+    fun registerState(name:String, linearId: UniqueIdentifier){
+        stateMap[name] = linearId
     }
 
     /**
      * Retrieve the linear id of a state
      */
-    fun retrieveNode(name: String): UniqueIdentifier?{
-        if (nodeMap.containsKey(name)){
-            return nodeMap[name]
+    fun retrieveState(name: String): UniqueIdentifier?{
+        if (stateMap.containsKey(name)){
+            return stateMap[name]
         }
 
-        return nodeMap.entries.first { it.key.startsWith(name) }.value
+        return stateMap.entries.first { it.key.startsWith(name) }.value
     }
 
     /**
@@ -197,23 +226,26 @@ class Main(configRoot: String) {
         return mapOf(
             Bye.COMMAND to Bye(),
             Help.COMMAND to Help(),
-            Nodes.COMMAND to Nodes(),
+            ListNode.COMMAND to ListNode(),
+            ListAccount.COMMAND to ListAccount(),
             IssueCash.COMMAND to IssueCash(),
             ReissueCash.COMMAND to ReissueCash(),
             PayCash.COMMAND to PayCash(),
-            Create.COMMAND to Create(),
-            Update.COMMAND to Update(),
-            Purchase.COMMAND to Purchase(),
-            Transfer.COMMAND to Transfer(),
-            Redeem.COMMAND to Redeem()
+            LoadAccounts.COMMAND to LoadAccounts(),
+            CreateAccount.COMMAND to CreateAccount(),
+            CreateReport.COMMAND to CreateReport(),
+            UpdateReport.COMMAND to UpdateReport(),
+            PurchaseDiamond.COMMAND to PurchaseDiamond(),
+            TransferDiamond.COMMAND to TransferDiamond(),
+            RedeemDiamond.COMMAND to RedeemDiamond()
         )
     }
 
     /**
      * Recursively search subdirectories for node.conf configuration file.
      */
-    private fun readConfiguration(path: String): Map<String, User> {
-        val map = HashMap<String, User>()
+    private fun readConfiguration(path: String): MutableMap<String, Node> {
+        val map = HashMap<String, Node>()
 
         val file = File(path)
 
@@ -223,13 +255,13 @@ class Main(configRoot: String) {
 
         readConfiguration(File(path), map)
 
-        return map.toMap()
+        return map
     }
 
     /**
      * Search for node.conf files and recursively search subdirectories.
      */
-    private fun readConfiguration(directory: File, map: HashMap<String, User>){
+    private fun readConfiguration(directory: File, map: HashMap<String, Node>){
         val file = File(directory, "node.conf")
 
         if (file.exists()){
@@ -250,7 +282,7 @@ class Main(configRoot: String) {
      * Parse a node.conf file to retrieve the legal name, user name,
      * password and node address.
      */
-    private fun parseConfiguration(name: String, file: File, map: HashMap<String, User>){
+    private fun parseConfiguration(name: String, file: File, map: HashMap<String, Node>){
         val encoded = Files.readAllBytes(file.toPath())
         val text = String(encoded, StandardCharsets.UTF_8)
                 .replace('\n',' ')
@@ -261,7 +293,7 @@ class Main(configRoot: String) {
         val address = findText(addressPattern, text)
 
         if (!legalName.contains("notary", true)){
-            map[name] = User(this, name, legalName, username, password, address)
+            map[name.toLowerCase()] = Node(this, name, legalName, username, password, address)
         }
     }
 

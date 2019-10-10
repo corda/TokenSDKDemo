@@ -20,15 +20,15 @@ class IssueCash : Command {
         if (array.size != 4){
             return help().listIterator()
         }
-        val issuer = main.getUser(array[1])
+        val issuer = main.retrieveNode(array[1])
 
         if (!issuer.isIssuer()){
-            return listOf("Only bank issuers are allowed to issue cash").listIterator()
+            return listOf("Only banks are allowed to issue cash").listIterator()
         }
 
         val connection = main.getConnection(issuer)
         val service = connection.proxy
-        val receiver = main.getWellKnownUser(main.getUser(array[2]), service)
+        val receiver = main.retrieveAccount(array[2])
 
         val amount = Utilities.getAmount(array[3])
 
@@ -46,10 +46,10 @@ class IssueCash : Command {
     }
 
     override fun description(): String {
-        return "Issue cash from an issuer"
+        return "Issue cash from a bank"
     }
 
     override fun help(): List<String> {
-        return listOf("usage: issue-cash <issuer> <receiver> <currency-amount>")
+        return listOf("usage: issue-cash bank account amount")
     }
 }

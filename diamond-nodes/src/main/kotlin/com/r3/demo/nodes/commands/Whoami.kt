@@ -22,7 +22,7 @@ class Whoami : Command {
         if (array.size != 2){
             return help().listIterator()
         }
-        val user = main.getUser(array[1])
+        val user = main.retrieveNode(array[1])
         val connection = main.getConnection(user)
         val service = connection.proxy
 

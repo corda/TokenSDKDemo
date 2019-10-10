@@ -21,9 +21,9 @@ fun <T : ContractState> getStateReference(serviceHub: ServiceHub, clazz: Class<T
 }
 
 fun logTime(serviceHub: ServiceHub, logstart: AtomicLong, message: String){
-    val logtime = System.currentTimeMillis() - logstart.get()
+    val logTime = System.currentTimeMillis() - logstart.get()
 
-    serviceHub.contextLogger().info("TTT - ${message} = ${logtime}ms")
+    serviceHub.contextLogger().info("TTT - ${message} = ${logTime}ms")
 
     logstart.set(System.currentTimeMillis())
 }

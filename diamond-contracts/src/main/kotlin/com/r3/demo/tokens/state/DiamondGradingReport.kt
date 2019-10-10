@@ -19,7 +19,7 @@ data class DiamondGradingReport(
         val clarity: ClarityScale,
         val cut: String,
         val assessor: Party,
-        val requester: Party,
+        val requester: AbstractParty,
         override val linearId: UniqueIdentifier
 ) : EvolvableTokenType() {
     @Suppress("unused")

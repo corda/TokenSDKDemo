@@ -113,8 +113,8 @@ object Utilities {
         val caret = matcher.group(3)
         val stats = "," + matcher.group(4) + ","
 
-        val issuerParty = main.getWellKnownUser(main.getUser(issuer), service)
-        val requesterParty = main.getWellKnownUser(main.getUser(requester), service)
+        val issuerParty = main.getWellKnownUser(main.retrieveNode(issuer), service)
+        val requesterParty = main.getWellKnownUser(main.retrieveNode(requester), service)
         val clarity = parseClarity(stats)
         val colour = parseColour(stats)
         val cut = parseCut(stats)
@@ -141,7 +141,7 @@ fun NonFungibleToken.printReport(): String {
     val text = toString()
 
     if (text.contains("DiamondGradingReport")){
-        val id = (this.token.tokenType as TokenPointer<*>).tokenIdentifier.toString().substring(0, 8)
+        val id = (this.token.tokenType as TokenPointer<*>).tokenIdentifier.substring(0, 8)
         return "TokenPointer(DiamondGradingReport, ${id}) issued by ${issuer.name.organisation} held by $holderString"
     }
     return text

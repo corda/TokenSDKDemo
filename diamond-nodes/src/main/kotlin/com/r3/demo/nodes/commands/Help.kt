@@ -1,7 +1,6 @@
 package com.r3.demo.nodes.commands
 
 import com.r3.demo.nodes.Main
-import kotlin.collections.List
 
 /**
  * Implement the help command

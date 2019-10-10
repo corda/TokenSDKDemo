@@ -1,38 +1,33 @@
 package com.r3.demo.tokens.flows
 
-import com.r3.corda.lib.tokens.contracts.states.FungibleToken
-import com.r3.corda.lib.tokens.money.FiatCurrency
-import io.github.classgraph.ClassGraph
+import com.r3.corda.lib.accounts.workflows.services.KeyManagementBackedAccountService
+import com.r3.corda.lib.tokens.money.USD
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import net.corda.core.contracts.Amount
-import net.corda.core.internal.pooledScan
 import net.corda.core.utilities.getOrThrow
 import net.corda.testing.node.*
-import net.corda.testing.node.internal.TestCordappImpl
-import net.corda.testing.node.internal.TestCordappInternal
-import java.io.File
-import java.nio.file.Path
-import kotlin.test.assertEquals
 
 class TestCashReissueFlow {
     private lateinit var mockNet: MockNetwork
     private lateinit var nodeIssuer: StartedMockNode
-    private lateinit var nodeReceiver: StartedMockNode
+    private lateinit var nodeHolder: StartedMockNode
 
     @Before
     fun start() {
         mockNet = MockNetwork(MockNetworkParameters(cordappsForAllNodes = listOf(
                 TestCordapp.findCordapp("com.r3.corda.lib.tokens.contracts"),
+                TestCordapp.findCordapp("com.r3.corda.lib.accounts.contracts"),
+                TestCordapp.findCordapp("com.r3.corda.lib.accounts.workflows"),
                 TestCordapp.findCordapp("com.r3.demo.tokens.contract"),
                 TestCordapp.findCordapp("com.r3.demo.tokens.flows")
         )))
         nodeIssuer = mockNet.createNode()
-        nodeReceiver = mockNet.createNode()
+        nodeHolder = mockNet.createNode()
 
-        listOf(nodeIssuer, nodeReceiver).forEach { it.registerInitiatedFlow(CashIssueFlow.CashIssueFlowResponse::class.java) }
-        listOf(nodeIssuer, nodeReceiver).forEach { it.registerInitiatedFlow(CashReissueFlow.CashReissueFlowResponse::class.java) }
+        listOf(nodeIssuer, nodeHolder).forEach {
+            it.registerInitiatedFlow(CashIssueFlow.CashIssueFlowResponse::class.java)
+        }
 
         mockNet.startNodes()
     }
@@ -43,36 +38,61 @@ class TestCashReissueFlow {
     }
 
     @Test
-    fun `reissue cash`() {
-        val issueAmount = Amount(100, FiatCurrency.getInstance("USD"))
-        val reissueAmount = Amount(80, FiatCurrency.getInstance("USD"))
-        val holder = nodeReceiver.info.legalIdentities.first()
-        val issuer = nodeIssuer.info.legalIdentities.first()
+    fun `reissue cash split`() {
+        val accountService = nodeHolder.services.cordaService(KeyManagementBackedAccountService::class.java)
 
-        val issueFuture = nodeIssuer.startFlow(CashIssueFlow(holder, issueAmount))
+        val aliceState = createAccount(mockNet, accountService, "Alice")
 
-        mockNet.runNetwork()
+        issueCash(mockNet, nodeIssuer, aliceState, 100.USD)
 
-        issueFuture.getOrThrow()
+        verifyAccountWallet(nodeHolder, aliceState, 1, 100)
 
-        val reissueFuture = nodeReceiver.startFlow(CashReissueFlow(issuer, reissueAmount))
+        val reissueFuture = nodeHolder.startFlow(CashReissueFlow(aliceState.state.data, nodeIssuer.info.legalIdentities.first(), 40.USD))
 
         mockNet.runNetwork()
 
-        val reissueTx = reissueFuture.getOrThrow()
+        reissueFuture.getOrThrow()
 
-        for (node in listOf(nodeIssuer, nodeReceiver)) {
-            val recordedTx = node.services.validatedTransactions.getTransaction(reissueTx.id)
-            val txOutputs = recordedTx!!.tx.outputs
-            assert(txOutputs.size == 1)
-
-            val recordedState = txOutputs[0].data as FungibleToken
-
-            assertEquals(80, recordedState.amount.quantity)
-
-            assertEquals(recordedState.issuedTokenType.tokenType.tokenIdentifier, "USD")
-            assertEquals(recordedState.holder, nodeReceiver.info.legalIdentities.first())
-            assertEquals(recordedState.issuer, nodeIssuer.info.legalIdentities.first())
-        }
+        verifyAccountWallet(nodeHolder, aliceState, 2,100)
      }
+
+    @Test
+    fun `reissue cash combine`() {
+        val accountService = nodeHolder.services.cordaService(KeyManagementBackedAccountService::class.java)
+
+        val aliceState = createAccount(mockNet, accountService, "Alice")
+
+        issueCash(mockNet, nodeIssuer, aliceState, 40.USD)
+        issueCash(mockNet, nodeIssuer, aliceState, 60.USD)
+
+        verifyAccountWallet(nodeHolder, aliceState, 2, 100)
+
+        val reissueFuture = nodeHolder.startFlow(CashReissueFlow(aliceState.state.data, nodeIssuer.info.legalIdentities.first(), 100.USD))
+
+        mockNet.runNetwork()
+
+        reissueFuture.getOrThrow()
+
+        verifyAccountWallet(nodeHolder, aliceState, 1,100)
+    }
+
+    @Test
+    fun `reissue cash combine change`() {
+        val accountService = nodeHolder.services.cordaService(KeyManagementBackedAccountService::class.java)
+
+        val aliceState = createAccount(mockNet, accountService, "Alice")
+
+        issueCash(mockNet, nodeIssuer, aliceState, 40.USD)
+        issueCash(mockNet, nodeIssuer, aliceState, 40.USD)
+
+        verifyAccountWallet(nodeHolder, aliceState, 2, 80)
+
+        val reissueFuture = nodeHolder.startFlow(CashReissueFlow(aliceState.state.data, nodeIssuer.info.legalIdentities.first(), 60.USD))
+
+        mockNet.runNetwork()
+
+        reissueFuture.getOrThrow()
+
+        verifyAccountWallet(nodeHolder, aliceState, 2,80)
+    }
 }

@@ -1,24 +1,39 @@
 package com.r3.demo.tokens.flows
 
 import co.paralleluniverse.fibers.Suspendable
+import com.r3.corda.lib.accounts.contracts.states.AccountInfo
+import com.r3.corda.lib.accounts.workflows.flows.RequestKeyForAccount
+import com.r3.corda.lib.accounts.workflows.flows.ShareAccountInfo
+import com.r3.corda.lib.accounts.workflows.internal.flows.createKeyForAccount
+import com.r3.corda.lib.ci.workflows.SyncKeyMappingInitiator
 import com.r3.corda.lib.tokens.contracts.states.NonFungibleToken
 import com.r3.corda.lib.tokens.contracts.types.TokenPointer
 import com.r3.corda.lib.tokens.contracts.types.TokenType
+import com.r3.corda.lib.tokens.contracts.utilities.issuedBy
+import com.r3.corda.lib.tokens.workflows.flows.issue.addIssueTokens
 import com.r3.corda.lib.tokens.workflows.flows.move.MoveTokensFlowHandler
 import com.r3.corda.lib.tokens.workflows.flows.move.addMoveTokens
 import com.r3.corda.lib.tokens.workflows.internal.flows.distribution.UpdateDistributionListFlow
 import com.r3.corda.lib.tokens.workflows.internal.flows.finality.ObserverAwareFinalityFlow
 import com.r3.corda.lib.tokens.workflows.flows.move.addMoveFungibleTokens
+import com.r3.corda.lib.tokens.workflows.utilities.heldBy
 import com.r3.demo.tokens.state.DiamondGradingReport
 import net.corda.core.contracts.Amount
+import net.corda.core.contracts.Requirements.using
 import net.corda.core.contracts.UniqueIdentifier
+import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
+import net.corda.core.identity.AnonymousParty
 import net.corda.core.identity.Party
 import net.corda.core.node.StatesToRecord
+import net.corda.core.node.services.Vault
+import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
+import net.corda.core.utilities.contextLogger
 import net.corda.core.utilities.unwrap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Implements the transfer token flow.
@@ -30,10 +45,17 @@ import net.corda.core.utilities.unwrap
 @StartableByRPC
 class TransferDiamondGradingReportFlow(
         private val tokenId: UniqueIdentifier,
-        private val buyer: Party,
+        private val seller: AccountInfo,
+        private val buyer: AccountInfo,
         private val amount: Amount<TokenType>) : FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
+        requireThat { "Seller not hosted on this node" using (seller.host == ourIdentity) }
+
+        if (buyer.host == ourIdentity) {
+            return TransferWithinNode().call()
+        }
+
         val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId)
 
         @Suppress("unchecked_cast")
@@ -42,9 +64,17 @@ class TransferDiamondGradingReportFlow(
 
         val diamondGradingReportRef = getStateReference(serviceHub, DiamondGradingReport::class.java, reportId)
 
-        val other = initiateFlow(buyer)
+        val sellerAccount = getStateReference(serviceHub, AccountInfo::class.java, seller.linearId)
+
+        // Send seller account info to buyer
+        subFlow(ShareAccountInfo(sellerAccount, listOf(buyer.host)))
+
+        // Send key mappings of token holder to buyer
+        subFlow(SyncKeyMappingInitiator(buyer.host, listOf(original.state.data.holder)))
 
         val tx = serviceHub.validatedTransactions.getTransaction(diamondGradingReportRef.ref.txhash)!!
+
+        val other = initiateFlow(buyer.host)
 
         // Send tx containing the diamond grade report to buyer
         subFlow(SendTransactionFlow(other, tx))
@@ -53,20 +83,20 @@ class TransferDiamondGradingReportFlow(
         subFlow(SendStateAndRefFlow(other, listOf(original)))
 
         // Send trade details
-        other.send(SellerTradeInfo(amount, ourIdentity))
+        other.send(TradeInfo(buyer, seller, amount))
 
         // Verify the transaction from the buyer is valid
-        val signedTransactionFlow = object : SignTransactionFlow(other, SignTransactionFlow.tracker()){
+        val signedTransactionFlow = object : SignTransactionFlow(other, tracker()){
             override fun checkTransaction(stx: SignedTransaction) {
 
             }
         }
 
-        val txid = subFlow(signedTransactionFlow)
+        val txId = subFlow(signedTransactionFlow)
 
         subFlow(MoveTokensFlowHandler(other))
 
-        return txid
+        return txId
     }
 
     @Suppress("unused")
@@ -81,35 +111,104 @@ class TransferDiamondGradingReportFlow(
             val originalToken = subFlow(ReceiveStateAndRefFlow<NonFungibleToken>(flowSession)).single()
 
             // Receive the trade details
-            val tradeInfo = flowSession.receive<SellerTradeInfo>().unwrap { it }
+            val tradeInfo = flowSession.receive<TradeInfo>().unwrap { it }
+
+            val buyer = tradeInfo.buyer
+
+            requireThat {"Buyer not hosted on this node" using (buyer.host == ourIdentity) }
+
+            val buyerParty = createKeyForAccount(buyer, serviceHub)
+            val sellerParty = subFlow(RequestKeyForAccount(tradeInfo.seller))
+
+            // Define criteria to retrieve only cash from payer
+            val criteria = QueryCriteria.VaultQueryCriteria(
+                    status = Vault.StateStatus.UNCONSUMED,
+                    externalIds = listOf(buyer.identifier.id)
+            )
+
+            val notary = serviceHub.networkMapCache.notaryIdentities.first()
+            val builder = TransactionBuilder(notary)
+
+            // Add payment command from buyer to seller
+            addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, sellerParty, buyerParty, criteria)
+
+            // Create a list of local signatures for the command
+            val signers = builder.commands().first().signers + ourIdentity.owningKey + buyerParty.owningKey
 
             // Update the token to the new owner
             val modifiedToken = NonFungibleToken(
                     token = originalToken.state.data.token,
                     linearId = originalToken.state.data.linearId,
-                    holder = ourIdentity)
-
-            val notary = serviceHub.networkMapCache.notaryIdentities.first()
-            val builder = TransactionBuilder(notary)
+                    holder = buyerParty)
 
             // Exchange the token and payment
             addMoveTokens(builder, listOf(originalToken), listOf(modifiedToken))
-            addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, tradeInfo.party, ourIdentity, null)
 
             // Sign off the transaction
-            val selfSignedTransaction = serviceHub.signInitialTransaction(builder)
+            val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)
+
+            // Collect remote signature
             val fullySignedTransaction = subFlow(CollectSignaturesFlow(selfSignedTransaction, listOf(flowSession)))
 
             // Notify the notary
             val finalityTransaction = subFlow(ObserverAwareFinalityFlow(fullySignedTransaction, listOf(flowSession)))
+
             subFlow(UpdateDistributionListFlow(finalityTransaction))
         }
     }
 
+    /**
+     * Use case where both buyer and seller are on the same node
+     */
+    inner class TransferWithinNode(){
+        @Suspendable
+        fun call(): SignedTransaction {
+            // Create a buyer party for the transaction.
+            val sellerParty = createKeyForAccount(seller, serviceHub)
+
+            // Create a buyer party for the transaction.
+            val buyerParty = createKeyForAccount(buyer, serviceHub)
+
+            val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId)
+
+            // Update the token to the new owner
+            val modified = NonFungibleToken(
+                    token = original.state.data.token,
+                    linearId = original.state.data.linearId,
+                    holder = buyerParty)
+
+            val criteria = QueryCriteria.VaultQueryCriteria(
+                    status = Vault.StateStatus.UNCONSUMED,
+                    externalIds = listOf(buyer.identifier.id)
+            )
+
+            val notary = serviceHub.networkMapCache.notaryIdentities.first()
+            val builder = TransactionBuilder(notary)
+
+            // Add the money for the transaction
+            addMoveFungibleTokens(builder, serviceHub, amount, sellerParty, buyerParty, criteria)
+
+            val originalSigners = original.state.data.participants.map { it.owningKey }
+            val signers = builder.commands().first().signers + ourIdentity.owningKey + sellerParty.owningKey + buyerParty.owningKey + originalSigners
+
+            addMoveTokens(builder, listOf(original), listOf(modified))
+
+            // Sign off the transaction
+            val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)
+
+            val finalityTransaction = subFlow(ObserverAwareFinalityFlow(selfSignedTransaction, emptyList()))
+
+            subFlow(UpdateDistributionListFlow(finalityTransaction))
+
+            return selfSignedTransaction
+        }
+    }
+
     @CordaSerializable
-    data class SellerTradeInfo(
-            val price: Amount<TokenType>,
-            val party: Party
+    data class TradeInfo(
+            val buyer: AccountInfo,
+            val seller: AccountInfo,
+            val price: Amount<TokenType>
     )
 }
 

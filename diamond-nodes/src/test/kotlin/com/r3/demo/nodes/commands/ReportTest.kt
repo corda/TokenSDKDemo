@@ -1,7 +1,7 @@
 package com.r3.demo.nodes.commands
 
 import com.r3.demo.nodes.Main
-import com.r3.demo.nodes.User
+import com.r3.demo.nodes.Node
 import net.corda.client.rpc.RPCConnection
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.messaging.CordaRPCOps
@@ -20,13 +20,13 @@ class ReportTest {
         val service = Mockito.mock(CordaRPCOps::class.java)
         val connection = TestConnection(service)
 
-        Mockito.`when`(main.getConnection(any(User::class.java))).thenReturn(connection)
+        Mockito.`when`(main.getConnection(any(Node::class.java))).thenReturn(connection)
 
-        val requester = User(main, "alice", "userA", "","","")
-        val assessor = User(main, "gic", "userB", "","","")
+        val requester = Node(main, "alice", "userA", "","","")
+        val assessor = Node(main, "gic", "userB", "","","")
 
-        Mockito.`when`(main.getUser(eq("alice"))).thenReturn(requester)
-        Mockito.`when`(main.getUser(eq("gic"))).thenReturn(assessor)
+        Mockito.`when`(main.retrieveNode(eq("alice"))).thenReturn(requester)
+        Mockito.`when`(main.retrieveNode(eq("gic"))).thenReturn(assessor)
         Mockito.`when`(main.getWellKnownUser(eq(requester), any(CordaRPCOps::class.java))).thenReturn(ALICE.party)
         Mockito.`when`(main.getWellKnownUser(eq(assessor), any(CordaRPCOps::class.java))).thenReturn(GIC.party)
 

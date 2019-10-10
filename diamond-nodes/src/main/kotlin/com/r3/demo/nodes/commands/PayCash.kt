@@ -19,24 +19,26 @@ class PayCash : Command {
      * @param array list of command plus arguments
      * @param parameters original command line
      */
-    override fun execute(main: Main, array: kotlin.collections.List<String>, parameters: String): Iterator<String> {
+    override fun execute(main: Main, array: List<String>, parameters: String): Iterator<String> {
         if (array.size < 4){
             return help().listIterator()
         }
 
-        // Get the user who is meant to invoke the command
-        val payer = main.getUser(array[1])
+        val payerInfo = main.retrieveAccount(array[1])
+        val receiverInfo = main.retrieveAccount(array[2])
+
+        // Get the node of the receiver which is meant to invoke the command
+        val payer = main.retrieveNode(payerInfo)
         val connection = main.getConnection(payer)
         val service = connection.proxy
-        val receiver = main.getWellKnownUser(main.getUser(array[2]), service)
 
         val amount = Utilities.getAmount(array[3])
 
-        service.startTrackedFlow(::CashTransferFlow, receiver, amount).returnValue.get()
+        service.startTrackedFlow(::CashTransferFlow, payerInfo, receiverInfo, amount).returnValue.get()
 
         // Display the new list of unconsumed states
-        val nodes = Nodes()
-        val text = "nodes ${array[1]}"
+        val nodes = ListAccount()
+        val text = "list ${array[1]}"
 
         return nodes.execute(main, text.split(" "), text)
     }
@@ -46,10 +48,10 @@ class PayCash : Command {
     }
 
     override fun description(): String {
-        return "Pay cash between users"
+        return "Pay cash between accounts"
     }
 
-    override fun help(): kotlin.collections.List<String> {
+    override fun help(): List<String> {
         return listOf("usage: pay-cash payer receiver amount")
     }
 }
