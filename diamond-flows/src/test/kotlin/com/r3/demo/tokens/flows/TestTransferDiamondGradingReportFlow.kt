@@ -113,7 +113,41 @@ class TestTransferDiamondGradingReportFlow {
     }
 
     @Test
-    fun `transfer report across nodes`() {
+    fun `transfer report across nodes no change`() {
+        val report = createReport(mockNet, nodeIssuer, nodeDealer)
+
+        val dealerAccountService = nodeDealer.services.cordaService(KeyManagementBackedAccountService::class.java)
+        val buyerAccountService = nodeBuyer.services.cordaService(KeyManagementBackedAccountService::class.java)
+
+        val dealerState = createAccount(mockNet, dealerAccountService, "Dealer")
+        val aliceState = createAccount(mockNet, dealerAccountService, "Alice")
+        val bobState = createAccount(mockNet, buyerAccountService, "Bob")
+
+        issueCash(mockNet, nodeIssuer, aliceState, 100.USD)
+        issueCash(mockNet, nodeIssuer, bobState, 100.USD)
+
+        val purchaseFuture = nodeDealer.startFlow(PurchaseDiamondGradingReportFlow(report.linearId, dealerState.state.data, aliceState.state.data, 60.USD))
+
+        mockNet.runNetwork()
+
+        val reportTx = purchaseFuture.getOrThrow()
+
+        val tokenId = retrieveDiamondTokenId(nodeDealer, reportTx)
+
+        val transferFuture = nodeDealer.startFlow(TransferDiamondGradingReportFlow(tokenId, aliceState.state.data, bobState.state.data, 100.USD))
+
+        mockNet.runNetwork()
+
+        transferFuture.getOrThrow()
+
+        verifyAccountWallet(nodeDealer, aliceState, 0, 140)
+        verifyAccountWallet(nodeBuyer, bobState, 0, 0)
+        verifyDiamondTokenMissing(nodeDealer, aliceState)
+        verifyDiamondTokenPresent(nodeBuyer, bobState)
+    }
+
+    @Test
+    fun `transfer report across nodes with change`() {
         val report = createReport(mockNet, nodeIssuer, nodeDealer)
 
         val dealerAccountService = nodeDealer.services.cordaService(KeyManagementBackedAccountService::class.java)

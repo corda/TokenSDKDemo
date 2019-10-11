@@ -33,7 +33,7 @@ class UpdateDiamondGradingReportFlow(private val reportId: UniqueIdentifier, pri
     class UpdateDiamondGradingReportFlowResponse (private val flowSession: FlowSession): FlowLogic<SignedTransaction>() {
         @Suspendable
         override fun call(): SignedTransaction {
-            val signedTransactionFlow = object : SignTransactionFlow(flowSession, SignTransactionFlow.tracker()){
+            val signedTransactionFlow = object : SignTransactionFlow(flowSession, tracker()){
                 override fun checkTransaction(stx: SignedTransaction) {
                 }
             }

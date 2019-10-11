@@ -9,31 +9,24 @@ import com.r3.corda.lib.ci.workflows.SyncKeyMappingInitiator
 import com.r3.corda.lib.tokens.contracts.states.NonFungibleToken
 import com.r3.corda.lib.tokens.contracts.types.TokenPointer
 import com.r3.corda.lib.tokens.contracts.types.TokenType
-import com.r3.corda.lib.tokens.contracts.utilities.issuedBy
-import com.r3.corda.lib.tokens.workflows.flows.issue.addIssueTokens
 import com.r3.corda.lib.tokens.workflows.flows.move.MoveTokensFlowHandler
 import com.r3.corda.lib.tokens.workflows.flows.move.addMoveTokens
 import com.r3.corda.lib.tokens.workflows.internal.flows.distribution.UpdateDistributionListFlow
 import com.r3.corda.lib.tokens.workflows.internal.flows.finality.ObserverAwareFinalityFlow
 import com.r3.corda.lib.tokens.workflows.flows.move.addMoveFungibleTokens
-import com.r3.corda.lib.tokens.workflows.utilities.heldBy
+import com.r3.corda.lib.tokens.workflows.utilities.ourSigningKeys
 import com.r3.demo.tokens.state.DiamondGradingReport
 import net.corda.core.contracts.Amount
-import net.corda.core.contracts.Requirements.using
 import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
-import net.corda.core.identity.AnonymousParty
-import net.corda.core.identity.Party
 import net.corda.core.node.StatesToRecord
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
-import net.corda.core.utilities.contextLogger
 import net.corda.core.utilities.unwrap
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Implements the transfer token flow.
@@ -129,20 +122,20 @@ class TransferDiamondGradingReportFlow(
             val notary = serviceHub.networkMapCache.notaryIdentities.first()
             val builder = TransactionBuilder(notary)
 
-            // Add payment command from buyer to seller
-            addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, sellerParty, buyerParty, criteria)
-
-            // Create a list of local signatures for the command
-            val signers = builder.commands().first().signers + ourIdentity.owningKey + buyerParty.owningKey
-
             // Update the token to the new owner
             val modifiedToken = NonFungibleToken(
                     token = originalToken.state.data.token,
                     linearId = originalToken.state.data.linearId,
                     holder = buyerParty)
 
-            // Exchange the token and payment
+            // Add payment command from buyer to seller
+            addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, sellerParty, buyerParty, criteria)
+
+            // Update token owner
             addMoveTokens(builder, listOf(originalToken), listOf(modifiedToken))
+
+            // Create a list of local signatures for the command
+            val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey
 
             // Sign off the transaction
             val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)
@@ -160,7 +153,7 @@ class TransferDiamondGradingReportFlow(
     /**
      * Use case where both buyer and seller are on the same node
      */
-    inner class TransferWithinNode(){
+    inner class TransferWithinNode {
         @Suspendable
         fun call(): SignedTransaction {
             // Create a buyer party for the transaction.
@@ -171,12 +164,7 @@ class TransferDiamondGradingReportFlow(
 
             val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId)
 
-            // Update the token to the new owner
-            val modified = NonFungibleToken(
-                    token = original.state.data.token,
-                    linearId = original.state.data.linearId,
-                    holder = buyerParty)
-
+            // Define criteria to retrieve only cash from payer
             val criteria = QueryCriteria.VaultQueryCriteria(
                     status = Vault.StateStatus.UNCONSUMED,
                     externalIds = listOf(buyer.identifier.id)
@@ -185,13 +173,20 @@ class TransferDiamondGradingReportFlow(
             val notary = serviceHub.networkMapCache.notaryIdentities.first()
             val builder = TransactionBuilder(notary)
 
+            // Update the token to the new owner
+            val modified = NonFungibleToken(
+                    token = original.state.data.token,
+                    linearId = original.state.data.linearId,
+                    holder = buyerParty)
+
             // Add the money for the transaction
             addMoveFungibleTokens(builder, serviceHub, amount, sellerParty, buyerParty, criteria)
 
-            val originalSigners = original.state.data.participants.map { it.owningKey }
-            val signers = builder.commands().first().signers + ourIdentity.owningKey + sellerParty.owningKey + buyerParty.owningKey + originalSigners
-
+            // Update token owner
             addMoveTokens(builder, listOf(original), listOf(modified))
+
+            // Create a list of local signatures for the command
+            val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey
 
             // Sign off the transaction
             val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)

@@ -13,6 +13,7 @@ import com.r3.corda.lib.tokens.workflows.internal.flows.distribution.UpdateDistr
 import com.r3.corda.lib.tokens.workflows.internal.flows.finality.ObserverAwareFinalityFlow
 import com.r3.corda.lib.tokens.workflows.flows.move.addMoveFungibleTokens
 import com.r3.corda.lib.tokens.workflows.utilities.heldBy
+import com.r3.corda.lib.tokens.workflows.utilities.ourSigningKeys
 import com.r3.demo.tokens.state.DiamondGradingReport
 import net.corda.core.contracts.Amount
 import net.corda.core.contracts.UniqueIdentifier
@@ -106,10 +107,11 @@ class PurchaseDiamondGradingReportFlow(
             // Add the money for the transaction
             addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, dealerParty, buyerParty, criteria)
 
-            val signers = builder.commands().first().signers + ourIdentity.owningKey + buyerParty.owningKey
-
-            // Issue the token and exchange payment
+            // Issue the token
             addIssueTokens(builder, listOf(tradeInfo.token heldBy buyerParty))
+
+            // Create a list of local signatures for the command
+            val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey
 
             // Sign off the transaction
             val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)
@@ -151,10 +153,11 @@ class PurchaseDiamondGradingReportFlow(
             // Add the money for the transaction
             addMoveFungibleTokens(builder, serviceHub, amount, dealerParty, buyerParty, criteria)
 
-            val signers = builder.commands().first().signers + ourIdentity.owningKey + dealerParty.owningKey + buyerParty.owningKey
-
-            // Issue the token and exchange payment
+            // Issue the token
             addIssueTokens(builder, listOf(token))
+
+            // Create a list of local signatures for the command
+            val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey
 
             // Sign off the transaction
             val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)

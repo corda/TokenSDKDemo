@@ -13,6 +13,7 @@ import com.r3.corda.lib.tokens.workflows.flows.move.addMoveFungibleTokens
 import com.r3.corda.lib.tokens.workflows.flows.redeem.addTokensToRedeem
 import com.r3.corda.lib.tokens.workflows.internal.flows.distribution.UpdateDistributionListFlow
 import com.r3.corda.lib.tokens.workflows.internal.flows.finality.ObserverAwareFinalityFlow
+import com.r3.corda.lib.tokens.workflows.utilities.ourSigningKeys
 import net.corda.core.contracts.Amount
 import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.contracts.requireThat
@@ -109,11 +110,11 @@ class RedeemDiamondGradingReportFlow(
             // Add payment command from dealer to redeemer
             addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, redeemerParty, dealerParty, criteria)
 
-            // Create a list of local signatures for the command
-            val signers = builder.commands().first().signers + ourIdentity.owningKey + dealerParty.owningKey
-
             // Add redeem token command
             addTokensToRedeem(builder, listOf(originalToken), null)
+
+            // Create a list of local signatures for the command
+            val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey
 
             // Sign off the transaction
             val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)
@@ -151,18 +152,11 @@ class RedeemDiamondGradingReportFlow(
             // Add payment command from dealer to redeemer
             addMoveFungibleTokens(builder, serviceHub, amount, redeemerParty, dealerParty, criteria)
 
-            // Locate the original signers of the token
-            val originalSigners = original.state.data.participants.map { it.owningKey }
-
-            // Create a list of all local signatures for the command
-            val signers = builder.commands().first().signers +
-                    ourIdentity.owningKey +
-                    dealerParty.owningKey +
-                    redeemerParty.owningKey +
-                    originalSigners
-
             // Add redeem token command
             addTokensToRedeem(builder, listOf(original), null)
+
+            // Create a list of local signatures for the command
+            val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey
 
             val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)
 

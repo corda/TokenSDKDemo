@@ -8,6 +8,7 @@ import com.r3.corda.lib.tokens.contracts.types.TokenType
 import com.r3.corda.lib.tokens.workflows.flows.move.MoveTokensFlowHandler
 import com.r3.corda.lib.tokens.workflows.internal.flows.finality.ObserverAwareFinalityFlow
 import com.r3.corda.lib.tokens.workflows.flows.move.addMoveFungibleTokens
+import com.r3.corda.lib.tokens.workflows.utilities.ourSigningKeys
 import net.corda.core.contracts.Amount
 import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
@@ -54,7 +55,7 @@ class CashTransferFlow(
         addMoveFungibleTokens(builder, serviceHub, amount, buyerParty, payerParty, criteria)
 
         // Retrieve the list of signers for the transaction
-        val signers = builder.commands().first().signers + ourIdentity.owningKey
+        val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey
 
         // Self sign the transaction with signatures found on the command
         val signedTransaction = serviceHub.signInitialTransaction(builder, signers)

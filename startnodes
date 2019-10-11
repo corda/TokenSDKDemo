@@ -1,0 +1,9 @@
+#!/bin/sh
+
+for dir in AAA BBB GIC Notary Bank ; do
+    cd build/nodes/$dir
+    echo Starting $dir
+    java -Xmx2G -jar corda.jar > std.out 2>&1 &
+    sleep 5
+    cd ../../..
+done

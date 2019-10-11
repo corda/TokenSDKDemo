@@ -10,6 +10,7 @@ import com.r3.corda.lib.tokens.contracts.utilities.issuedBy
 import com.r3.corda.lib.tokens.workflows.flows.issue.IssueTokensFlow
 import com.r3.corda.lib.tokens.workflows.flows.issue.IssueTokensFlowHandler
 import com.r3.corda.lib.tokens.workflows.flows.redeem.addFungibleTokensToRedeem
+import com.r3.corda.lib.tokens.workflows.utilities.ourSigningKeys
 import net.corda.core.contracts.Amount
 import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
@@ -50,7 +51,7 @@ class CashReissueFlow(
         // Create transaction to redeem the cash
         addFungibleTokensToRedeem(builder, serviceHub, amount, issuer, owningParty, criteria)
 
-        val signers = builder.commands().first().signers + ourIdentity.owningKey - issuer.owningKey
+        val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey
 
         // Self sign the transaction
         val selfSignedTransaction = serviceHub.signInitialTransaction(builder, signers)

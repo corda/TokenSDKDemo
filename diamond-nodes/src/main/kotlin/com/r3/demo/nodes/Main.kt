@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util.*
 import java.util.regex.Pattern
+import kotlin.system.exitProcess
 
 /**
  * Entry point for the Vault Generator command line tool.
@@ -40,7 +41,7 @@ fun main(args: Array<String>) {
             "-s" -> silent = true
             "-l" -> logTime = true
             "-h" -> usage()
-            else -> throw IllegalArgumentException("Unknown option: ${argument}")
+            else -> throw IllegalArgumentException("Unknown option: $argument")
         }
     }
 
@@ -59,7 +60,7 @@ fun main(args: Array<String>) {
 
     while (true) {
         if (filename.isBlank()){
-            System.out.print("> ")
+            print("> ")
         }
 
         val line = reader.readLine() ?: break
@@ -71,15 +72,15 @@ fun main(args: Array<String>) {
         }
 
         if (logTime){
-            System.out.println("Time start ${Date()}")
+            println("Time start ${Date()}")
         }
 
         val response = main.parseCommand(command, array, line)
 
         if (!silent){
-            response.forEach { System.out.println(it) }
+            response.forEach { println(it) }
             if (logTime && Utilities.logtime >= 0){
-                System.out.println("Time duration = ${Utilities.logtime}ms")
+                println("Time duration = ${Utilities.logtime}ms")
                 Utilities.logCancel()
             }
         }
@@ -105,7 +106,8 @@ private fun createInputStream(filename: String): BufferedReader {
  */
 private fun usage(){
     System.err.println("usage: Main [-d config-directory] [-f file] [-s]")
-    System.exit(1)
+
+    exitProcess(1)
 }
 
 /**
@@ -146,7 +148,7 @@ class Main(configRoot: String) {
      * Map the name to the [Node] object
      */
     fun retrieveNode(name: String): Node {
-        return nodeMap[name.toLowerCase()] ?: throw IllegalArgumentException("Unknown node ${name}")
+        return nodeMap[name.toLowerCase()] ?: throw IllegalArgumentException("Unknown node $name")
     }
 
     /**
@@ -197,7 +199,7 @@ class Main(configRoot: String) {
      * Retrieve the buyer info of an buyer
      */
     fun retrieveAccount(name: String): AccountInfo {
-        return accountMap[name.toLowerCase()] ?: throw IllegalArgumentException("Unknown account ${name}")
+        return accountMap[name.toLowerCase()] ?: throw IllegalArgumentException("Unknown account $name")
     }
 
     /**
@@ -250,7 +252,7 @@ class Main(configRoot: String) {
         val file = File(path)
 
         if (!file.exists() || !file.isDirectory){
-            logger.error("Cannot find configuration directory ${path}")
+            logger.error("Cannot find configuration directory $path")
         }
 
         readConfiguration(File(path), map)
@@ -272,7 +274,7 @@ class Main(configRoot: String) {
             }
         } else {
             directory.listFiles { f -> f.isDirectory }
-                    .iterator().forEach {
+                    ?.iterator()?.forEach {
                         readConfiguration(it, map)
                     }
         }
