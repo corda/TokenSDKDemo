@@ -140,7 +140,11 @@ class Main(configRoot: String) {
         return try {
             processor.execute(this, array, line)
         } catch (e: Exception){
-            (listOf("Error processing commands ${command}. ${e.message}") + processor.help()).listIterator()
+            if (e.toString().contains("InsufficientBalanceException")){
+                listOf("Insufficient Balance - transaction could not be processed").listIterator()
+            } else {
+                (listOf("Error processing commands ${command}. ${e.message}") + processor.help()).listIterator()
+            }
         }
     }
 

@@ -29,7 +29,7 @@ import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.unwrap
 
 /**
- * Implements the transfer token flow.
+ * Implements the transfer token flow in exchange for payment.
  * The buyer wants buy a token from the seller and provides the payment.
  * The flow is initiated by the seller.
  * The buyer creates the transaction with payment which is then verified by the seller.
@@ -129,7 +129,7 @@ class TransferDiamondGradingReportFlow(
                     holder = buyerParty)
 
             // Add payment command from buyer to seller
-            addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, sellerParty, buyerParty, criteria)
+            addMoveFungibleTokensWithFlowException(builder, serviceHub, tradeInfo.price, sellerParty, buyerParty, criteria)
 
             // Update token owner
             addMoveTokens(builder, listOf(originalToken), listOf(modifiedToken))

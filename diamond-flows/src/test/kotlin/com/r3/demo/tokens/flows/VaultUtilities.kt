@@ -90,6 +90,17 @@ fun verifyGradingReport(node: StartedMockNode, report: DiamondGradingReport) {
     val token = vault.first().state.data as DiamondGradingReport
 
     assertEquals(report.caratWeight, token.caratWeight)
+    assertEquals(report.color, token.color)
+    assertEquals(report.clarity, token.clarity)
+}
+
+fun verifyGradingReportMissing(node: StartedMockNode) {
+    val criteria = QueryCriteria.VaultQueryCriteria(
+            status = Vault.StateStatus.UNCONSUMED
+    )
+    val vault = node.services.vaultService.queryBy<ContractState>(DiamondGradingReport::class.java, criteria = criteria).states
+
+    assertEquals(0, vault.size)
 }
 
 fun verifyDiamondTokenPresent(node: StartedMockNode, account: StateAndRef<AccountInfo>) {

@@ -2,6 +2,7 @@ package com.r3.demo.tokens.flows
 
 import com.r3.corda.lib.accounts.workflows.services.KeyManagementBackedAccountService
 import com.r3.corda.lib.tokens.money.USD
+import net.corda.core.utilities.contextLogger
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -117,5 +118,29 @@ class TestCashTransferFlow {
 
         verifyAccountWallet(nodePayer, aliceState, 1,60)
         verifyAccountWallet(nodeBuyer, bobState, 1,120)
+    }
+
+    @Test
+    fun `transfer cash across nodes over spend`() {
+        val holderAccountService = nodePayer.services.cordaService(KeyManagementBackedAccountService::class.java)
+        val buyerAccountService = nodeBuyer.services.cordaService(KeyManagementBackedAccountService::class.java)
+
+        val aliceState = createAccount(mockNet, holderAccountService, "Alice")
+        val bobState = createAccount(mockNet, buyerAccountService,"Bob")
+
+        issueCash(mockNet, nodeIssuer, aliceState, 80.USD)
+
+        try {
+            val transferFuture = nodePayer.startFlow(CashTransferFlow(aliceState.state.data, bobState.state.data, 120.USD))
+
+            mockNet.runNetwork()
+
+            transferFuture.getOrThrow()
+        } catch (e: Throwable) {
+            // com.r3.corda.lib.tokens.selection.InsufficientBalanceException
+        }
+
+        verifyAccountWallet(nodePayer, aliceState, 1,80)
+        verifyAccountWallet(nodeBuyer, bobState, 0,0)
     }
 }

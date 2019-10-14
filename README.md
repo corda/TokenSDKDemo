@@ -29,12 +29,14 @@ In this demo the account name is assumed to be unique across all nodes.
 
 ## Build and Execution
 
-The following steps can be used to build the application, run the nodes and start the RCP client
+The following steps can be used to build the application, run the nodes and start the RCP client. (The script
+startnodes will execute the Corda nodes in background without a shell window. If you want to use the shell
+then start the nodes using runnodes.)
 
     ./gradlew jar deployNodes
     ./deployCordapps
-    ./build/nodes/runnodes
-    java -jar diamond-nodes/build/libs/shell-nodes-0.1.jar
+    ./startnodes
+    ./startclient
 
 The current build.gradle uses the following releases
 

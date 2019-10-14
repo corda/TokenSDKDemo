@@ -105,7 +105,7 @@ class PurchaseDiamondGradingReportFlow(
             val builder = TransactionBuilder(notary)
 
             // Add the money for the transaction
-            addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, dealerParty, buyerParty, criteria)
+            addMoveFungibleTokensWithFlowException(builder, serviceHub, tradeInfo.price, dealerParty, buyerParty, criteria)
 
             // Issue the token
             addIssueTokens(builder, listOf(tradeInfo.token heldBy buyerParty))

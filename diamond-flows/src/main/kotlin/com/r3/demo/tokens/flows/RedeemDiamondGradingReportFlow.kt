@@ -108,7 +108,7 @@ class RedeemDiamondGradingReportFlow(
             val builder = TransactionBuilder(notary)
 
             // Add payment command from dealer to redeemer
-            addMoveFungibleTokens(builder, serviceHub, tradeInfo.price, redeemerParty, dealerParty, criteria)
+            addMoveFungibleTokensWithFlowException(builder, serviceHub, tradeInfo.price, redeemerParty, dealerParty, criteria)
 
             // Add redeem token command
             addTokensToRedeem(builder, listOf(originalToken), null)
