@@ -27,6 +27,21 @@ the node. This is so that money for the dealer can be kept separate from money f
 
 In this demo the account name is assumed to be unique across all nodes.
 
+### Zookeeper Integration
+
+Accounts created from the client through the CreateAccountFlow can be recorded in a Zookeeper instance by
+activating the built-in zookeeper client. By default the client is not active. The following configuration
+properties are used to configure the zookeeper client.
+
+    directory.service=true|false
+    directory.service.url=localhost:2181
+    
+The configuration properties must be recorded in the configuration file diamond-flows-0.1.conf 
+in the cordaps/config directory.
+
+For each account a znode is created in the /accounts directory on the zookeeper server, with the znode data
+containing the serialised version of the AccountInfo object.
+
 ## Build and Execution
 
 The following steps can be used to build the application, run the nodes and start the RCP client. (The script
@@ -43,7 +58,7 @@ The current build.gradle uses the following releases
     corda_release_group = 'net.corda'
     corda_release_version = '4.3-RC01'
     tokens_release_group = 'com.r3.corda.lib.tokens'
-    tokens_release_version = '1.1-RC01'
+    tokens_release_version = '1.1-RC05-PRESIGN'
     accounts_release_group = 'com.r3.corda.lib.accounts'
     accounts_release_version = '1.0-RC03'
     confidential_id_release_group = "com.r3.corda.lib.ci"
@@ -159,6 +174,10 @@ Exit the client
 The following is a walk through of the buying/selling process.
 
     $ java -jar diamond-nodes/build/libs/shell-nodes-0.1.jar
+    Node AAA on [OU=Dealer,O=AAA,L=Sydney,C=AU]
+    Node Bank on [O=Bank,L=London,C=GB]
+    Node BBB on [OU=Dealer,O=BBB,L=Sydney,C=AU]
+    Node GIC on [OU=Certifier,O=GIC,L=Canberra,C=AU]
     > create-account AAA AAA
     AAA on [OU=Dealer, O=AAA, L=Sydney, C=AU] with id 48832117-58a1-4ab1-be2d-312b1640d95d
     > create-account AAA Alice

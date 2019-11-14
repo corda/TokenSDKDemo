@@ -55,7 +55,7 @@ class RedeemDiamondGradingReportFlow(
         subFlow(ShareAccountInfo(redeemerAccount, listOf(dealer.host)))
 
         // Retrieve the token to be redeemed
-        val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId)
+        val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId, redeemer)
 
         // Send key mappings of token holder to dealer
         subFlow(SyncKeyMappingInitiator(dealer.host, listOf(original.state.data.holder)))
@@ -104,14 +104,19 @@ class RedeemDiamondGradingReportFlow(
                     externalIds = listOf(dealer.identifier.id)
             )
 
+            val reportId = originalToken.state.data.token.tokenType.tokenIdentifier
+            val markerType = TokenType("Marker$reportId", 0)
+            val markerState = getToken(serviceHub, markerType, ourIdentity)
+
             val notary = serviceHub.networkMapCache.notaryIdentities.first()
             val builder = TransactionBuilder(notary)
 
             // Add payment command from dealer to redeemer
             addMoveFungibleTokensWithFlowException(builder, serviceHub, tradeInfo.price, redeemerParty, dealerParty, criteria)
 
-            // Add redeem token command
+            // Add redeem token commands
             addTokensToRedeem(builder, listOf(originalToken), null)
+            addTokensToRedeem(builder, listOf(markerState), null)
 
             // Create a list of local signatures for the command
             val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey
@@ -136,7 +141,7 @@ class RedeemDiamondGradingReportFlow(
     inner class RedeemDiamondGradingReportWithinNode {
         @Suspendable
         fun call(): SignedTransaction {
-            val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId)
+            val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId, redeemer)
 
             val criteria = QueryCriteria.VaultQueryCriteria(
                     status = Vault.StateStatus.UNCONSUMED,
@@ -149,11 +154,16 @@ class RedeemDiamondGradingReportFlow(
             val dealerParty = createKeyForAccount(dealer, serviceHub)
             val redeemerParty = createKeyForAccount(redeemer, serviceHub)
 
+            val reportId = original.state.data.token.tokenType.tokenIdentifier
+            val markerType = TokenType("Marker$reportId", 0)
+            val markerState = getToken(serviceHub, markerType, ourIdentity)
+
             // Add payment command from dealer to redeemer
             addMoveFungibleTokens(builder, serviceHub, amount, redeemerParty, dealerParty, criteria)
 
-            // Add redeem token command
+            // Add redeem token commands
             addTokensToRedeem(builder, listOf(original), null)
+            addTokensToRedeem(builder, listOf(markerState), null)
 
             // Create a list of local signatures for the command
             val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey

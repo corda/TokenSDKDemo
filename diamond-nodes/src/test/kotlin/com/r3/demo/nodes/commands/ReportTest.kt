@@ -27,11 +27,11 @@ class ReportTest {
 
         Mockito.`when`(main.retrieveNode(eq("alice"))).thenReturn(requester)
         Mockito.`when`(main.retrieveNode(eq("gic"))).thenReturn(assessor)
-        Mockito.`when`(main.getWellKnownUser(eq(requester), any(CordaRPCOps::class.java))).thenReturn(ALICE.party)
-        Mockito.`when`(main.getWellKnownUser(eq(assessor), any(CordaRPCOps::class.java))).thenReturn(GIC.party)
+        Mockito.`when`(main.getWellKnownUser(eq(requester))).thenReturn(ALICE.party)
+        Mockito.`when`(main.getWellKnownUser(eq(assessor))).thenReturn(GIC.party)
 
         val text = "create alice (gic, alice, 1.0, VVS2, E, 'EX')"
-        val report = Utilities.parseReport(main, service, text)
+        val report = Utilities.parseReport(main, text)
 
         assertEquals(ALICE.party, report.requester)
         assertEquals(GIC.party, report.assessor)

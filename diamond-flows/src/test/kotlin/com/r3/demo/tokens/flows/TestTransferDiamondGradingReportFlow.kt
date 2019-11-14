@@ -11,6 +11,7 @@ import org.junit.Test
 import net.corda.core.utilities.getOrThrow
 import net.corda.testing.common.internal.testNetworkParameters
 import net.corda.testing.node.*
+import org.assertj.core.api.Assertions
 
 class TestTransferDiamondGradingReportFlow {
     private lateinit var mockNet: MockNetwork
@@ -77,6 +78,38 @@ class TestTransferDiamondGradingReportFlow {
         verifyAccountWallet(nodeDealer, bobState, 1, 50)
         verifyDiamondTokenMissing(nodeDealer, aliceState)
         verifyDiamondTokenPresent(nodeDealer, bobState)
+    }
+
+    @Test
+    fun `transfer report within nodes illegal sale`() {
+        val report = createReport(mockNet, nodeIssuer, nodeDealer)
+
+        val accountService = nodeDealer.services.cordaService(KeyManagementBackedAccountService::class.java)
+
+        val dealerState = createAccount(mockNet, accountService, "Dealer")
+        val aliceState = createAccount(mockNet, accountService, "Alice")
+        val charlieState = createAccount(mockNet, accountService, "Charlie")
+        val bobState = createAccount(mockNet, accountService, "Bob")
+
+        issueCash(mockNet, nodeIssuer, aliceState, 100.USD)
+        issueCash(mockNet, nodeIssuer, charlieState, 100.USD)
+        issueCash(mockNet, nodeIssuer, bobState, 100.USD)
+
+        val purchaseFuture = nodeDealer.startFlow(PurchaseDiamondGradingReportFlow(report.linearId, dealerState.state.data, aliceState.state.data, 60.USD))
+
+        mockNet.runNetwork()
+
+        val reportTx = purchaseFuture.getOrThrow()
+
+        val tokenId = retrieveDiamondTokenId(nodeDealer, reportTx)
+
+        Assertions.assertThatExceptionOfType(IllegalArgumentException::class.java).isThrownBy {
+            val transferFuture = nodeDealer.startFlow(TransferDiamondGradingReportFlow(tokenId, charlieState.state.data, bobState.state.data, 50.USD))
+
+            mockNet.runNetwork()
+
+            transferFuture.getOrThrow()
+        }
     }
 
     @Test
@@ -178,6 +211,39 @@ class TestTransferDiamondGradingReportFlow {
         verifyAccountWallet(nodeBuyer, bobState, 1, 50)
         verifyDiamondTokenMissing(nodeDealer, aliceState)
         verifyDiamondTokenPresent(nodeBuyer, bobState)
+    }
+
+    @Test
+    fun `transfer report across nodes illegal sale`() {
+        val report = createReport(mockNet, nodeIssuer, nodeDealer)
+
+        val dealerAccountService = nodeDealer.services.cordaService(KeyManagementBackedAccountService::class.java)
+        val buyerAccountService = nodeBuyer.services.cordaService(KeyManagementBackedAccountService::class.java)
+
+        val dealerState = createAccount(mockNet, dealerAccountService, "Dealer")
+        val aliceState = createAccount(mockNet, dealerAccountService, "Alice")
+        val charlieState = createAccount(mockNet, dealerAccountService, "Charlie")
+        val bobState = createAccount(mockNet, buyerAccountService, "Bob")
+
+        issueCash(mockNet, nodeIssuer, aliceState, 100.USD)
+        issueCash(mockNet, nodeIssuer, charlieState, 100.USD)
+        issueCash(mockNet, nodeIssuer, bobState, 100.USD)
+
+        val purchaseFuture = nodeDealer.startFlow(PurchaseDiamondGradingReportFlow(report.linearId, dealerState.state.data, aliceState.state.data, 60.USD))
+
+        mockNet.runNetwork()
+
+        val reportTx = purchaseFuture.getOrThrow()
+
+        val tokenId = retrieveDiamondTokenId(nodeDealer, reportTx)
+
+        Assertions.assertThatExceptionOfType(IllegalArgumentException::class.java).isThrownBy {
+            val transferFuture = nodeDealer.startFlow(TransferDiamondGradingReportFlow(tokenId, charlieState.state.data, bobState.state.data, 50.USD))
+
+            mockNet.runNetwork()
+
+            transferFuture.getOrThrow()
+        }
     }
 
     private fun retrieveDiamondTokenId(node: StartedMockNode, tx: SignedTransaction): UniqueIdentifier {

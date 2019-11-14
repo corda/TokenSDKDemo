@@ -4,6 +4,7 @@ import co.paralleluniverse.fibers.Suspendable
 import com.r3.corda.lib.accounts.contracts.states.AccountInfo
 import com.r3.corda.lib.accounts.workflows.flows.RequestKeyForAccount
 import com.r3.corda.lib.accounts.workflows.internal.flows.createKeyForAccount
+import com.r3.corda.lib.tokens.contracts.states.NonFungibleToken
 import com.r3.corda.lib.tokens.contracts.types.IssuedTokenType
 import com.r3.corda.lib.tokens.contracts.types.TokenType
 import com.r3.corda.lib.tokens.contracts.utilities.issuedBy
@@ -32,6 +33,10 @@ import net.corda.core.utilities.unwrap
  * The buyer wants buy a token from a dealer and provides the payment.
  * The flow is initiated on the dealer's node.
  * The buyer creates the transaction with payment which is then verified by the dealer.
+ *
+ * To stop accidental double issue of the report a token marker is created. This token is issued
+ * and held by the dealer, so only appears in their vault. When the diamond token is redeemed the
+ * flow redeems the token marker too.
  */
 @InitiatingFlow
 @StartableByRPC
@@ -44,15 +49,22 @@ class PurchaseDiamondGradingReportFlow(
     override fun call(): SignedTransaction {
         requireThat { "Dealer not hosted on this node" using (dealer.host == ourIdentity) }
 
+        val diamondGradingReportRef = getStateReference(serviceHub, DiamondGradingReport::class.java, reportId)
+        val diamondGradingReport = diamondGradingReportRef.state.data
+        val diamondPointer = diamondGradingReport.toPointer<DiamondGradingReport>()
+
+        // Create a marker token type that is parallel to the diamond report token type
+        val markerType = TokenType("Marker$reportId", 0)
+
+        // Check that the marker is not already present
+        requireThat { "Report already in use" using (hasNoToken(serviceHub, markerType, ourIdentity)) }
+
         if (buyer.host == ourIdentity){
             return PurchaseDiamondGradingReportWithinNode().call()
         }
 
-        val diamondGradingReportRef = getStateReference(serviceHub, DiamondGradingReport::class.java, reportId)
-        val diamondGradingReport = diamondGradingReportRef.state.data
-        val diamondPointer = diamondGradingReport.toPointer<DiamondGradingReport>()
-        val token = diamondPointer issuedBy ourIdentity //heldBy buyerParty
-
+        val token = diamondPointer issuedBy ourIdentity
+        val marker = markerType issuedBy ourIdentity heldBy ourIdentity
         val other = initiateFlow(buyer.host)
 
         // Send the full TokenPointer details to the buyer, this must be
@@ -62,7 +74,7 @@ class PurchaseDiamondGradingReportFlow(
         subFlow(SendTransactionFlow(other, tx))
 
         // Send trade details
-        other.send(TradeInfo(dealer, buyer, amount, token))
+        other.send(TradeInfo(dealer, buyer, amount, token, marker))
 
         val signedTransactionFlow = object : SignTransactionFlow(other, tracker()) {
             override fun checkTransaction(stx: SignedTransaction) {
@@ -107,8 +119,8 @@ class PurchaseDiamondGradingReportFlow(
             // Add the money for the transaction
             addMoveFungibleTokensWithFlowException(builder, serviceHub, tradeInfo.price, dealerParty, buyerParty, criteria)
 
-            // Issue the token
-            addIssueTokens(builder, listOf(tradeInfo.token heldBy buyerParty))
+            // Issue the tokens
+            addIssueTokens(builder, listOf(tradeInfo.token heldBy buyerParty, tradeInfo.marker))
 
             // Create a list of local signatures for the command
             val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey
@@ -140,6 +152,10 @@ class PurchaseDiamondGradingReportFlow(
             val diamondGradingReportRef = getStateReference(serviceHub, DiamondGradingReport::class.java, reportId)
             val diamondGradingReport = diamondGradingReportRef.state.data
             val diamondPointer = diamondGradingReport.toPointer<DiamondGradingReport>()
+
+            val markerType = TokenType("Marker$reportId", 0)
+            val marker = markerType issuedBy ourIdentity heldBy ourIdentity
+
             val token = diamondPointer issuedBy ourIdentity heldBy buyerParty
 
             val criteria = QueryCriteria.VaultQueryCriteria(
@@ -154,7 +170,7 @@ class PurchaseDiamondGradingReportFlow(
             addMoveFungibleTokens(builder, serviceHub, amount, dealerParty, buyerParty, criteria)
 
             // Issue the token
-            addIssueTokens(builder, listOf(token))
+            addIssueTokens(builder, listOf(token, marker))
 
             // Create a list of local signatures for the command
             val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey
@@ -173,6 +189,7 @@ class PurchaseDiamondGradingReportFlow(
             val dealer: AccountInfo,
             val buyer: AccountInfo,
             val price: Amount<TokenType>,
-            val token: IssuedTokenType
+            val token: IssuedTokenType,
+            val marker: NonFungibleToken
     )
 }

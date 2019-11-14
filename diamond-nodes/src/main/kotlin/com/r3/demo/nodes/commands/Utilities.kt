@@ -5,17 +5,13 @@ import com.r3.corda.lib.tokens.contracts.types.TokenPointer
 import com.r3.corda.lib.tokens.contracts.types.TokenType
 import com.r3.corda.lib.tokens.contracts.utilities.holderString
 import com.r3.corda.lib.tokens.money.FiatCurrency
-import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.contracts.Amount
 import com.r3.demo.nodes.Main
 import com.r3.demo.tokens.state.DiamondGradingReport
 import net.corda.core.contracts.UniqueIdentifier
-import java.io.ByteArrayInputStream
-import java.io.FileOutputStream
 import java.lang.IllegalArgumentException
 import java.lang.StringBuilder
 import java.util.regex.Pattern
-import java.util.zip.ZipInputStream
 
 object Utilities {
     /**
@@ -26,7 +22,7 @@ object Utilities {
         val matcher = pattern.matcher(text)
 
         if (!matcher.matches()){
-            throw IllegalArgumentException("Cannot parse amount ${text}")
+            throw IllegalArgumentException("Cannot parse amount $text")
         }
 
         try {
@@ -39,26 +35,7 @@ object Utilities {
 
             return Amount(amount.toLong() * 100, FiatCurrency.getInstance(currency))
         } catch (e: Exception) {
-            throw java.lang.IllegalArgumentException("Cannot parse amount ${text}")
-        }
-    }
-
-    /**
-     * Expanded the zip file embedded in byte array into
-     * the files named in the zip file. The zip file is
-     * the returned results from the detect/explore command.
-     */
-    fun expandZipArray(array: ByteArray){
-        ZipInputStream(ByteArrayInputStream(array)).use {
-            var entry = it.nextEntry
-
-            while (entry != null){
-                FileOutputStream(entry.name).use {output ->
-                    it.copyTo(output)
-                }
-                it.closeEntry()
-                entry = it.nextEntry
-            }
+            throw IllegalArgumentException("Cannot parse amount $text")
         }
     }
 
@@ -101,20 +78,20 @@ object Utilities {
      * Parse the results from the output state matcher to create a new Node.
      * Output state definitions look like (name, owner, amount).
      */
-    fun parseReport(main: Main, service: CordaRPCOps, parameters: String, linearId: UniqueIdentifier = UniqueIdentifier()): DiamondGradingReport{
+    fun parseReport(main: Main, parameters: String, linearId: UniqueIdentifier = UniqueIdentifier()): DiamondGradingReport{
         val pattern = Pattern.compile("\\(\\s*([-\\w]+),\\s*([-\\w]+),\\s*([\\d.]+),\\s*(.+)\\)")
         val matcher = pattern.matcher(parameters)
 
         if (!matcher.find()){
-            throw IllegalArgumentException("Invalid diamond report: ${parameters}")
+            throw IllegalArgumentException("Invalid diamond report: $parameters")
         }
         val issuer = matcher.group(1)
         val requester = matcher.group(2)
         val caret = matcher.group(3)
         val stats = "," + matcher.group(4) + ","
 
-        val issuerParty = main.getWellKnownUser(main.retrieveNode(issuer), service)
-        val requesterParty = main.getWellKnownUser(main.retrieveNode(requester), service)
+        val issuerParty = main.getWellKnownUser(main.retrieveNode(issuer))
+        val requesterParty = main.getWellKnownUser(main.retrieveNode(requester))
         val clarity = parseClarity(stats)
         val colour = parseColour(stats)
         val cut = parseCut(stats)

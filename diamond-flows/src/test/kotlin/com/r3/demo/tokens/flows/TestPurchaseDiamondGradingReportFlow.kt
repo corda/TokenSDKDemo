@@ -8,6 +8,7 @@ import org.junit.Test
 import net.corda.core.utilities.getOrThrow
 import net.corda.testing.common.internal.testNetworkParameters
 import net.corda.testing.node.*
+import org.assertj.core.api.Assertions.assertThatExceptionOfType
 
 class TestPurchaseDiamondGradingReportFlow {
     private lateinit var mockNet: MockNetwork
@@ -130,4 +131,63 @@ class TestPurchaseDiamondGradingReportFlow {
         verifyAccountWallet(nodeDealer, dealer, 1, 160)
         verifyDiamondTokenPresent(nodeDealer, alice)
     }
+
+    @Test
+    fun `double sell report fail`() {
+        val report = createReport(mockNet, nodeIssuer, nodeDealer)
+
+        val accountService = nodeDealer.services.cordaService(KeyManagementBackedAccountService::class.java)
+        val dealer = createAccount(mockNet, accountService,"Dealer")
+        val alice = createAccount(mockNet, accountService,"Alice")
+        val bob = createAccount(mockNet, accountService,"Bob")
+
+        issueCash(mockNet, nodeIssuer, alice, 100.USD)
+        issueCash(mockNet, nodeIssuer, bob, 100.USD)
+
+        val aliceFuture = nodeDealer.startFlow(PurchaseDiamondGradingReportFlow(report.linearId, dealer.state.data, alice.state.data, 60.USD))
+
+        mockNet.runNetwork()
+
+        aliceFuture.getOrThrow()
+
+        assertThatExceptionOfType(IllegalArgumentException::class.java).isThrownBy {
+            val bobFuture = nodeDealer.startFlow(PurchaseDiamondGradingReportFlow(report.linearId, dealer.state.data, bob.state.data, 60.USD))
+
+            mockNet.runNetwork()
+
+            bobFuture.getOrThrow()
+        }
+    }
+
+    @Test
+    fun `double sell report pass`() {
+        val report = createReport(mockNet, nodeIssuer, nodeDealer)
+
+        val accountService = nodeDealer.services.cordaService(KeyManagementBackedAccountService::class.java)
+        val dealer = createAccount(mockNet, accountService,"Dealer")
+        val alice = createAccount(mockNet, accountService,"Alice")
+        val bob = createAccount(mockNet, accountService,"Bob")
+
+        issueCash(mockNet, nodeIssuer, alice, 100.USD)
+        issueCash(mockNet, nodeIssuer, bob, 100.USD)
+
+        val aliceFuture = nodeDealer.startFlow(PurchaseDiamondGradingReportFlow(report.linearId, dealer.state.data, alice.state.data, 60.USD))
+
+        mockNet.runNetwork()
+
+        val tx = aliceFuture.getOrThrow()
+        val tokenId = retrieveDiamondTokenId(nodeDealer, tx)
+        val redeemFuture = nodeDealer.startFlow(RedeemDiamondGradingReportFlow(tokenId, alice.state.data, dealer.state.data, 50.USD))
+
+        mockNet.runNetwork()
+
+        val rx = redeemFuture.getOrThrow()
+
+        val bobFuture = nodeDealer.startFlow(PurchaseDiamondGradingReportFlow(report.linearId, dealer.state.data, bob.state.data, 60.USD))
+
+        mockNet.runNetwork()
+
+        bobFuture.getOrThrow()
+    }
+
 }

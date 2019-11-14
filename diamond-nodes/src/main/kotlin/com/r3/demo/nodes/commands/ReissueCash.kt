@@ -37,7 +37,7 @@ class ReissueCash : Command {
 
         Utilities.logStart()
 
-        val cashState = service.startFlow(::CashReissueFlow, owner, main.getWellKnownUser(issuer, service), amount).returnValue.get()
+        val cashState = service.startFlow(::CashReissueFlow, owner, main.getWellKnownUser(issuer), amount).returnValue.get()
 
         Utilities.logFinish()
 

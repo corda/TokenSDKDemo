@@ -37,7 +37,7 @@ class UpdateReport : Command {
         val connection = main.getConnection(node)
         val service = connection.proxy
         val linearId = main.retrieveState(array[2]) ?: throw IllegalArgumentException("Report ID ${array[2]} not found")
-        val report = Utilities.parseReport(main, service, parameters, linearId)
+        val report = Utilities.parseReport(main, parameters, linearId)
 
         Utilities.logStart()
 

@@ -4,7 +4,7 @@ buildscript {
         corda_release_version = '4.3-RC01'
     	corda_platform_version = '4'
         corda_gradle_plugins_version = '4.0.42'
-        tokens_release_version = '1.1-RC01'
+        tokens_release_version = '1.1-RC05-PRESIGN'
         tokens_release_group = 'com.r3.corda.lib.tokens'
         accounts_release_version = '1.0-RC03'
         accounts_release_group = 'com.r3.corda.lib.accounts'

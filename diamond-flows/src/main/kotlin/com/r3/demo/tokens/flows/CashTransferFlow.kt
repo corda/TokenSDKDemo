@@ -24,7 +24,7 @@ import net.corda.core.transactions.TransactionBuilder
 @StartableByRPC
 class CashTransferFlow(
         private val payer: AccountInfo,
-        private val buyer: AccountInfo,
+        private val receiver: AccountInfo,
         private val amount: Amount<TokenType>) : FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
@@ -36,13 +36,13 @@ class CashTransferFlow(
         // Create a payer party to receive any change from the transfer
         val payerParty = createKeyForAccount(payer, serviceHub)
 
-        // Create a buyer party for the transaction. If buyer not on this
+        // Create a receiver party for the transaction. If receiver not on this
         // node then use the sub-flow to generate the party
-        val buyerParty =
-                if (buyer.host == ourIdentity) {
-                    createKeyForAccount(buyer, serviceHub)
+        val receiverParty =
+                if (receiver.host == ourIdentity) {
+                    createKeyForAccount(receiver, serviceHub)
                 } else {
-                    subFlow(RequestKeyForAccount(buyer))
+                    subFlow(RequestKeyForAccount(receiver))
                 }
 
         // Define criteria to retrieve only cash from payer
@@ -52,7 +52,7 @@ class CashTransferFlow(
         )
 
         // Build transaction to pay the buyer based on the criteria, giving the change to the payer
-        addMoveFungibleTokens(builder, serviceHub, amount, buyerParty, payerParty, criteria)
+        addMoveFungibleTokens(builder, serviceHub, amount, receiverParty, payerParty, criteria)
 
         // Retrieve the list of signers for the transaction
         val signers = builder.toLedgerTransaction(serviceHub).ourSigningKeys(serviceHub) + ourIdentity.owningKey
@@ -60,7 +60,7 @@ class CashTransferFlow(
         // Self sign the transaction with signatures found on the command
         val signedTransaction = serviceHub.signInitialTransaction(builder, signers)
 
-        val flow = initiateFlow(buyer.host)
+        val flow = initiateFlow(receiver.host)
         val flows = listOf(flow)
 
         return subFlow(ObserverAwareFinalityFlow(signedTransaction, flows))

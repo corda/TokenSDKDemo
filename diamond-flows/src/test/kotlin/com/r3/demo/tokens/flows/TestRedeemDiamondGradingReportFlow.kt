@@ -8,6 +8,7 @@ import org.junit.Test
 import net.corda.core.utilities.getOrThrow
 import net.corda.testing.common.internal.testNetworkParameters
 import net.corda.testing.node.*
+import org.assertj.core.api.Assertions
 
 class TestRedeemDiamondGradingReportFlow {
     private lateinit var mockNet: MockNetwork
@@ -76,6 +77,36 @@ class TestRedeemDiamondGradingReportFlow {
     }
 
     @Test
+    fun `redeem token within nodes illegal`() {
+        val report = createReport(mockNet, nodeIssuer, nodeDealer)
+
+        val accountService = nodeDealer.services.cordaService(KeyManagementBackedAccountService::class.java)
+        val dealerState = createAccount(mockNet, accountService, "Dealer")
+        val aliceState = createAccount(mockNet, accountService, "Alice")
+        val charlieState = createAccount(mockNet, accountService, "Charlie")
+
+        issueCash(mockNet, nodeIssuer, aliceState, 100.USD)
+
+        val purchaseFuture = nodeDealer.startFlow(PurchaseDiamondGradingReportFlow(report.linearId, dealerState.state.data, aliceState.state.data, 60.USD))
+
+        mockNet.runNetwork()
+
+        val reportTx = purchaseFuture.getOrThrow()
+
+        verifyDiamondTokenPresent(nodeDealer, aliceState)
+
+        val tokenId = retrieveDiamondTokenId(nodeDealer, reportTx)
+
+        Assertions.assertThatExceptionOfType(IllegalArgumentException::class.java).isThrownBy {
+            val redeemFuture = nodeDealer.startFlow(RedeemDiamondGradingReportFlow(tokenId, charlieState.state.data, dealerState.state.data, 50.USD))
+
+            mockNet.runNetwork()
+
+            redeemFuture.getOrThrow()
+        }
+    }
+
+    @Test
     fun `redeem report across nodes`() {
         val report = createReport(mockNet, nodeIssuer, nodeDealer)
 
@@ -106,5 +137,37 @@ class TestRedeemDiamondGradingReportFlow {
         verifyAccountWallet(nodeDealer, dealerState, 1, 10)
         verifyAccountWallet(nodeBuyer, aliceState, 0, 90)
         verifyDiamondTokenMissing(nodeDealer, aliceState)
+    }
+
+    @Test
+    fun `redeem report across nodes illegal`() {
+        val report = createReport(mockNet, nodeIssuer, nodeDealer)
+
+        val dealerAccountService = nodeDealer.services.cordaService(KeyManagementBackedAccountService::class.java)
+        val buyerAccountService = nodeBuyer.services.cordaService(KeyManagementBackedAccountService::class.java)
+
+        val dealerState = createAccount(mockNet, dealerAccountService, "Dealer")
+        val aliceState = createAccount(mockNet, buyerAccountService, "Alice")
+        val charlieState = createAccount(mockNet, buyerAccountService, "Charlie")
+
+        issueCash(mockNet, nodeIssuer, aliceState, 100.USD)
+
+        val purchaseFuture = nodeDealer.startFlow(PurchaseDiamondGradingReportFlow(report.linearId, dealerState.state.data, aliceState.state.data, 60.USD))
+
+        mockNet.runNetwork()
+
+        val reportTx = purchaseFuture.getOrThrow()
+
+        verifyDiamondTokenPresent(nodeBuyer, aliceState)
+
+        val tokenId = retrieveDiamondTokenId(nodeBuyer, reportTx)
+
+        Assertions.assertThatExceptionOfType(IllegalArgumentException::class.java).isThrownBy {
+            val transferFuture = nodeBuyer.startFlow(RedeemDiamondGradingReportFlow(tokenId, charlieState.state.data, dealerState.state.data, 50.USD))
+
+            mockNet.runNetwork()
+
+            transferFuture.getOrThrow()
+        }
     }
 }

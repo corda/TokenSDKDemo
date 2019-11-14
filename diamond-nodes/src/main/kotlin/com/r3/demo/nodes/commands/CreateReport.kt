@@ -1,6 +1,5 @@
 package com.r3.demo.nodes.commands
 
-import com.r3.corda.lib.tokens.contracts.states.NonFungibleToken
 import net.corda.core.messaging.startTrackedFlow
 import com.r3.demo.tokens.flows.CreateDiamondGradingReportFlow
 import com.r3.demo.nodes.Main
@@ -23,7 +22,7 @@ class CreateReport : Command {
      * @param array list of command plus arguments
      * @param parameters original command line
      */
-    override fun execute(main: Main, array: kotlin.collections.List<String>, parameters: String): Iterator<String> {
+    override fun execute(main: Main, array: List<String>, parameters: String): Iterator<String> {
         if (array.size < 2){
             return help().listIterator()
         }
@@ -37,7 +36,7 @@ class CreateReport : Command {
 
         val connection = main.getConnection(node)
         val service = connection.proxy
-        val report = Utilities.parseReport(main, service, parameters)
+        val report = Utilities.parseReport(main, parameters)
 
         Utilities.logStart()
 

@@ -2,6 +2,7 @@ package com.r3.demo.nodes
 
 import com.r3.corda.lib.accounts.contracts.states.AccountInfo
 import com.r3.demo.nodes.commands.*
+import com.r3.demo.tokens.flows.RetrieveAccountsFlow
 import net.corda.client.rpc.CordaRPCConnection
 import net.corda.client.rpc.CordaRPCClient
 import net.corda.client.rpc.RPCConnection
@@ -9,6 +10,7 @@ import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
 import net.corda.core.messaging.CordaRPCOps
+import net.corda.core.messaging.startTrackedFlow
 import net.corda.core.utilities.NetworkHostAndPort
 import org.slf4j.LoggerFactory
 import java.io.*
@@ -21,45 +23,36 @@ import java.util.regex.Pattern
 import kotlin.system.exitProcess
 
 /**
- * Entry point for the Vault Generator command line tool.
+ * Entry point for the Diamond command line tool.
  * The process should be taken in a directory where the node.conf
  * files can be found, otherwise the [-d] option should be used
  * to point to the configuration directory.
  */
 fun main(args: Array<String>) {
     val iterator = args.iterator()
-    var configRoot = "."
-    var filename = ""
-    var silent = false
-    var logTime = false
 
     while (iterator.hasNext()){
         val argument = iterator.next()
         when (argument) {
-            "-d" -> configRoot = iterator.next()
-            "-f" -> filename = iterator.next()
-            "-s" -> silent = true
-            "-l" -> logTime = true
+            "-d" -> Main.configRoot = iterator.next()
+            "-f" -> Main.filename = iterator.next()
+            "-l" -> Main.logTime = true
             "-h" -> usage()
             else -> throw IllegalArgumentException("Unknown option: $argument")
         }
     }
 
-    val main = Main(configRoot)
+    val main = Main()
 
     if (main.nodeMap.isEmpty()){
-        System.err.println("No nodes found in ${if (configRoot == ".") "current directory" else configRoot}")
+        System.err.println("No nodes found in ${if (Main.configRoot == ".") "current directory" else Main.configRoot}")
         usage()
     }
 
-    if (!silent){
-        println(main.nodeMap)
-    }
-
-    val reader = createInputStream(filename)
+    val reader = createInputStream(Main.filename)
 
     while (true) {
-        if (filename.isBlank()){
+        if (Main.filename.isBlank()){
             print("> ")
         }
 
@@ -67,26 +60,28 @@ fun main(args: Array<String>) {
         val array = line.trim().split(Pattern.compile("\\s+"))
         val command = array[0].toLowerCase()
 
-        if (command.isBlank()){
+        if (isBlank(command)){
             continue
         }
 
-        if (logTime){
+        if (Main.logTime){
             println("Time start ${Date()}")
         }
 
         val response = main.parseCommand(command, array, line)
 
-        if (!silent){
-            response.forEach { println(it) }
-            if (logTime && Utilities.logtime >= 0){
-                println("Time duration = ${Utilities.logtime}ms")
-                Utilities.logCancel()
-            }
+        response.forEach { println(it) }
+        if (Main.logTime && Utilities.logtime >= 0){
+            println("Time duration = ${Utilities.logtime}ms")
+            Utilities.logCancel()
         }
     }
 
     reader.close()
+}
+
+private fun isBlank(command: String): Boolean {
+    return command.isBlank() || command[0] == '#' || command[0].isISOControl()
 }
 
 /**
@@ -105,7 +100,7 @@ private fun createInputStream(filename: String): BufferedReader {
  * Display usage and exit.
  */
 private fun usage(){
-    System.err.println("usage: Main [-d config-directory] [-f file] [-s]")
+    System.err.println("usage: Main [-d config-directory] [-f file] [-u curator]")
 
     exitProcess(1)
 }
@@ -116,7 +111,12 @@ private fun usage(){
  * for node.conf files to establish the pool of users/nodes. Subsequently commands
  * can be processed using the [parseCommand] method.
  */
-class Main(configRoot: String) {
+class Main {
+    companion object {
+        var configRoot = "."
+        var filename = ""
+        var logTime = false
+    }
     private val logger = LoggerFactory.getLogger("Main")
 
     private val legalNamePattern = Pattern.compile("myLegalName\"?[\\s=:]+\"([^\"]+)\"")
@@ -125,10 +125,10 @@ class Main(configRoot: String) {
     private val addressPattern = Pattern.compile("address\"?[\\s=:]+\"([^\"]+)\"")
 
     private val connectionMap = HashMap<String, CordaRPCConnection>()
-    private val accountMap = HashMap<String, AccountInfo>()
     private val stateMap = HashMap<String, UniqueIdentifier>()
+    private val accountMap = HashMap<String, AccountInfo>()//readAccounts()
 
-    val nodeMap = readConfiguration(configRoot)
+    val nodeMap = readConfiguration()
     val commandMap = createCommandMap()
 
     /**
@@ -140,19 +140,19 @@ class Main(configRoot: String) {
         return try {
             processor.execute(this, array, line)
         } catch (e: Exception){
-            if (e.toString().contains("InsufficientBalanceException")){
-                listOf("Insufficient Balance - transaction could not be processed").listIterator()
-            } else {
-                (listOf("Error processing commands ${command}. ${e.message}") + processor.help()).listIterator()
-            }
+            val text = e.toString()
+            when {
+                text.contains("InsufficientBalanceException") ->
+                    listOf("Insufficient Balance - transaction could not be processed")
+                text.contains("Report already in use") ->
+                    listOf("Report already in use - transaction could not be processed")
+                text.contains("Collection contains no element matching the predicate") ->
+                    listOf("Item not found or not owned by account - transaction could not be processed")
+                text.contains("State not found") ->
+                    listOf("Item not found or not owned by account - transaction could not be processed")
+                else -> (listOf("Error processing commands ${command}. ${e.message}") + processor.help())
+            }.listIterator()
         }
-    }
-
-    /**
-     * Map the name to the [Node] object
-     */
-    fun retrieveNode(name: String): Node {
-        return nodeMap[name.toLowerCase()] ?: throw IllegalArgumentException("Unknown node $name")
     }
 
     /**
@@ -165,8 +165,16 @@ class Main(configRoot: String) {
     /**
      * Map the name to the [Node] object
      */
-    fun retrieveNode(name: AccountInfo): Node {
-        return nodeMap[name.host.name.toString()] ?: throw IllegalArgumentException("Unknown node ${name.name}")
+    fun retrieveNode(name: String): Node {
+        return nodeMap[name.toLowerCase()] ?: throw IllegalArgumentException("Unknown node $name")
+    }
+
+    /**
+     * Map the account name to the [Node] object
+     */
+    fun retrieveNode(account: AccountInfo): Node {
+        val name = account.host.name.organisation
+        return nodeMap[name.toLowerCase()] ?: throw IllegalArgumentException("Unknown account ${account.name}")
     }
 
     /**
@@ -184,26 +192,37 @@ class Main(configRoot: String) {
     }
 
     /**
-     * Translate the node name to the X500 name. The node name is obtained from the
-     * name of the directory containing the node.conf file, while the X500 name is based
-     * on the legal name.
+     * Map a node object to the party. If the party is not recorded
+     * on the node object then execute a RPC to get the party name
+     * from the node service.
      */
-    fun getWellKnownUser(node: Node, service: CordaRPCOps): Party {
-        return service.wellKnownPartyFromX500Name(CordaX500Name.parse(node.legalName)) ?: throw IllegalArgumentException("Unknown party name ${node.name}.")
+    fun getWellKnownUser(node: Node): Party {
+        if (node.party == null){
+            val service = getConnection(node).proxy
+            node.party = service.wellKnownPartyFromX500Name(CordaX500Name.parse(node.legalName))
+        }
+        return node.party ?: throw IllegalArgumentException("Unknown party name ${node.name}.")
     }
 
     /**
-     * Record the buyer info for an buyer name
+     * Record the account info
      */
     fun registerAccount(name:String, account: AccountInfo) {
         accountMap[name.toLowerCase()] = account
     }
 
     /**
-     * Retrieve the buyer info of an buyer
+     * Retrieve the account info from a name
      */
     fun retrieveAccount(name: String): AccountInfo {
         return accountMap[name.toLowerCase()] ?: throw IllegalArgumentException("Unknown account $name")
+    }
+
+    /**
+     * Retrieve the buyer info of an buyer
+     */
+    fun hasAccount(name: String): Boolean {
+        return accountMap.containsKey(name.toLowerCase())
     }
 
     /**
@@ -250,16 +269,17 @@ class Main(configRoot: String) {
     /**
      * Recursively search subdirectories for node.conf configuration file.
      */
-    private fun readConfiguration(path: String): MutableMap<String, Node> {
+    private fun readConfiguration(): MutableMap<String, Node> {
         val map = HashMap<String, Node>()
 
-        val file = File(path)
+        val file = File(configRoot)
 
         if (!file.exists() || !file.isDirectory){
-            logger.error("Cannot find configuration directory $path")
+            logger.error("Cannot find configuration directory $configRoot")
         }
 
-        readConfiguration(File(path), map)
+        readConfiguration(File(configRoot), map)
+        displayAccounts()
 
         return map
     }
@@ -299,7 +319,34 @@ class Main(configRoot: String) {
         val address = findText(addressPattern, text)
 
         if (!legalName.contains("notary", true)){
-            map[name.toLowerCase()] = Node(this, name, legalName, username, password, address)
+            val node = Node(this, name, legalName, username, password, address)
+            println("Node ${node.name} on [${node.legalName}]")
+            map[name.toLowerCase()] = node
+            readAccounts(node)
+        }
+    }
+
+    private fun readAccounts(node: Node) {
+        try {
+            if (!node.isDealer()){
+                return
+            }
+            val connection = getConnection(node)
+            val service = connection.proxy
+
+            val states = service.startTrackedFlow(::RetrieveAccountsFlow).returnValue.get()
+
+            states.forEach { account ->
+                registerAccount(account.name, account)
+            }
+        } catch (e: Exception){
+            println("Cannot read accounts from ${node.name}")
+        }
+    }
+
+    private fun displayAccounts() {
+        accountMap.values.forEach {account ->
+            println("Account ${account.name} on [${account.host.name}] with id ${account.identifier.id}")
         }
     }
 

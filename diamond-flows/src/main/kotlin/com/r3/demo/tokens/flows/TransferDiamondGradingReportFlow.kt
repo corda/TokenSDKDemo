@@ -49,7 +49,7 @@ class TransferDiamondGradingReportFlow(
             return TransferWithinNode().call()
         }
 
-        val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId)
+        val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId, seller)
 
         @Suppress("unchecked_cast")
         val tokenPointer = original.state.data.token.tokenType as TokenPointer<DiamondGradingReport>
@@ -162,7 +162,7 @@ class TransferDiamondGradingReportFlow(
             // Create a buyer party for the transaction.
             val buyerParty = createKeyForAccount(buyer, serviceHub)
 
-            val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId)
+            val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId, seller)
 
             // Define criteria to retrieve only cash from payer
             val criteria = QueryCriteria.VaultQueryCriteria(

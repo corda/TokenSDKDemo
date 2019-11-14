@@ -2,12 +2,14 @@ package com.r3.demo.tokens.flows
 
 import com.r3.corda.lib.accounts.workflows.services.KeyManagementBackedAccountService
 import com.r3.corda.lib.tokens.money.USD
+import com.r3.corda.lib.tokens.selection.InsufficientBalanceException
 import net.corda.core.utilities.contextLogger
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import net.corda.core.utilities.getOrThrow
 import net.corda.testing.node.*
+import org.assertj.core.api.Assertions
 
 class TestCashTransferFlow {
     private lateinit var mockNet: MockNetwork
@@ -130,14 +132,12 @@ class TestCashTransferFlow {
 
         issueCash(mockNet, nodeIssuer, aliceState, 80.USD)
 
-        try {
+        Assertions.assertThatExceptionOfType(InsufficientBalanceException::class.java).isThrownBy {
             val transferFuture = nodePayer.startFlow(CashTransferFlow(aliceState.state.data, bobState.state.data, 120.USD))
 
             mockNet.runNetwork()
 
             transferFuture.getOrThrow()
-        } catch (e: Throwable) {
-            // com.r3.corda.lib.tokens.selection.InsufficientBalanceException
         }
 
         verifyAccountWallet(nodePayer, aliceState, 1,80)

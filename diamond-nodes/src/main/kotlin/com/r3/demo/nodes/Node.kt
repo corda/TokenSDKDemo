@@ -1,5 +1,7 @@
 package com.r3.demo.nodes
 
+import net.corda.core.identity.Party
+
 /**
  * Records the node information for a user.
  */
@@ -9,6 +11,8 @@ class Node(val main: Main,
            val username: String,
            val password: String,
            val address: String){
+
+    var party: Party? = null
 
     override fun toString(): String {
         return legalName

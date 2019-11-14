@@ -1,9 +1,8 @@
 package com.r3.demo.nodes.commands
 
-import com.r3.corda.lib.accounts.workflows.flows.CreateAccount
-
 import net.corda.core.messaging.startTrackedFlow
 import com.r3.demo.nodes.Main
+import com.r3.demo.tokens.flows.CreateAccountFlow
 
 /**
  * Implement the issue command
@@ -38,7 +37,7 @@ class CreateAccount : Command {
 
         Utilities.logStart()
 
-        val state = service.startTrackedFlow(::CreateAccount, name).returnValue.get()
+        val state = service.startTrackedFlow(::CreateAccountFlow, name).returnValue.get()
         val account = state.state.data
 
         Utilities.logFinish()
@@ -46,7 +45,7 @@ class CreateAccount : Command {
         main.registerAccount(account.name, account)
         main.registerNode(account, node)
 
-        return listOf("${account.name} on [${account.host.name}] with id ${account.identifier.id}").listIterator()
+        return listOf("Account ${account.name} on [${account.host.name}] with id ${account.identifier.id}").listIterator()
     }
 
     override fun name(): String {
