@@ -31,7 +31,7 @@ class CashIssueFlow(private val accounts: List<AccountInfo>, private val amounts
         // node then use sub-flow to request for key
         val tokens = accounts.map { accountInfo ->
             val key = if (accountInfo.host == ourIdentity) {
-                createKeyForAccount(accountInfo, serviceHub).owningKey
+                serviceHub.createKeyForAccount(accountInfo).owningKey
             } else {
                 subFlow(RequestKeyForAccount(accountInfo)).owningKey
             }

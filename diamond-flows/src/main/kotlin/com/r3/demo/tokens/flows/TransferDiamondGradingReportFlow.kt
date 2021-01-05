@@ -110,7 +110,7 @@ class TransferDiamondGradingReportFlow(
 
             requireThat {"Buyer not hosted on this node" using (buyer.host == ourIdentity) }
 
-            val buyerParty = createKeyForAccount(buyer, serviceHub)
+            val buyerParty = serviceHub.createKeyForAccount(buyer)
             val sellerParty = subFlow(RequestKeyForAccount(tradeInfo.seller))
 
             // Define criteria to retrieve only cash from payer
@@ -157,10 +157,10 @@ class TransferDiamondGradingReportFlow(
         @Suspendable
         fun call(): SignedTransaction {
             // Create a buyer party for the transaction.
-            val sellerParty = createKeyForAccount(seller, serviceHub)
+            val sellerParty = serviceHub.createKeyForAccount(seller)
 
             // Create a buyer party for the transaction.
-            val buyerParty = createKeyForAccount(buyer, serviceHub)
+            val buyerParty = serviceHub.createKeyForAccount(buyer)
 
             val original = getStateReference(serviceHub, NonFungibleToken::class.java, tokenId, seller)
 

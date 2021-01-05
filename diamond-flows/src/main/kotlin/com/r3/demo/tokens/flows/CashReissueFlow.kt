@@ -37,7 +37,7 @@ class CashReissueFlow(
         requireThat {"Redeemer not hosted on this node" using (redeemer.host == ourIdentity) }
 
         // Generate party and key for the transaction
-        val owningParty = createKeyForAccount(redeemer, serviceHub)
+        val owningParty = serviceHub.createKeyForAccount(redeemer)
 
         // Define criteria to retrieve only cash from redeemer
         val criteria = QueryCriteria.VaultQueryCriteria(
@@ -100,7 +100,7 @@ class CashReissueFlow(
 
             val owningParty =
                     if (info.account.host == ourIdentity) {
-                        createKeyForAccount(info.account, serviceHub)
+                        serviceHub.createKeyForAccount(info.account)
                     } else {
                         subFlow(RequestKeyForAccount(info.account))
                     }

@@ -95,7 +95,7 @@ class RedeemDiamondGradingReportFlow(
 
             requireThat {"Dealer not hosted on this node" using (dealer.host == ourIdentity) }
 
-            val dealerParty = createKeyForAccount(dealer, serviceHub)
+            val dealerParty = serviceHub.createKeyForAccount(dealer)
             val redeemerParty = subFlow(RequestKeyForAccount(redeemer))
 
             // Define criteria to retrieve only cash from dealer
@@ -151,8 +151,8 @@ class RedeemDiamondGradingReportFlow(
             val notary = serviceHub.networkMapCache.notaryIdentities.first()
             val builder = TransactionBuilder(notary)
 
-            val dealerParty = createKeyForAccount(dealer, serviceHub)
-            val redeemerParty = createKeyForAccount(redeemer, serviceHub)
+            val dealerParty = serviceHub.createKeyForAccount(dealer)
+            val redeemerParty = serviceHub.createKeyForAccount(redeemer)
 
             val reportId = original.state.data.token.tokenType.tokenIdentifier
             val markerType = TokenType("Marker$reportId", 0)

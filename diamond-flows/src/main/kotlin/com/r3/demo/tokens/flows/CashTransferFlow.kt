@@ -34,13 +34,13 @@ class CashTransferFlow(
         val builder = TransactionBuilder(notary)
 
         // Create a payer party to receive any change from the transfer
-        val payerParty = createKeyForAccount(payer, serviceHub)
+        val payerParty = serviceHub.createKeyForAccount(payer)
 
         // Create a receiver party for the transaction. If receiver not on this
         // node then use the sub-flow to generate the party
         val receiverParty =
                 if (receiver.host == ourIdentity) {
-                    createKeyForAccount(receiver, serviceHub)
+                    serviceHub.createKeyForAccount(receiver)
                 } else {
                     subFlow(RequestKeyForAccount(receiver))
                 }

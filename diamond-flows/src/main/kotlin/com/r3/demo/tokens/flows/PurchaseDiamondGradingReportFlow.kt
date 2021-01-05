@@ -105,7 +105,7 @@ class PurchaseDiamondGradingReportFlow(
             requireThat {"Buyer not hosted on this node" using (buyer.host == ourIdentity) }
 
             val dealerParty = subFlow(RequestKeyForAccount(dealer))
-            val buyerParty = createKeyForAccount(buyer, serviceHub)
+            val buyerParty = serviceHub.createKeyForAccount(buyer)
 
             // Define criteria to retrieve only cash from payer
             val criteria = QueryCriteria.VaultQueryCriteria(
@@ -144,10 +144,10 @@ class PurchaseDiamondGradingReportFlow(
         @Suspendable
         fun call(): SignedTransaction {
             // Create a dealer party for the transaction
-            val dealerParty = createKeyForAccount(dealer, serviceHub)
+            val dealerParty = serviceHub.createKeyForAccount(dealer)
 
             // Create a buyer party for the transaction
-            val buyerParty = createKeyForAccount(buyer, serviceHub)
+            val buyerParty = serviceHub.createKeyForAccount(buyer)
 
             val diamondGradingReportRef = getStateReference(serviceHub, DiamondGradingReport::class.java, reportId)
             val diamondGradingReport = diamondGradingReportRef.state.data

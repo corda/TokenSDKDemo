@@ -3,6 +3,7 @@ package com.r3.demo.nodes
 import com.r3.corda.lib.accounts.contracts.states.AccountInfo
 import com.r3.demo.nodes.commands.*
 import com.r3.demo.tokens.flows.RetrieveAccountsFlow
+import com.typesafe.config.ConfigFactory
 import net.corda.client.rpc.CordaRPCConnection
 import net.corda.client.rpc.CordaRPCClient
 import net.corda.client.rpc.RPCConnection
@@ -16,7 +17,6 @@ import org.slf4j.LoggerFactory
 import java.io.*
 import java.lang.Exception
 import java.lang.IllegalArgumentException
-import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util.*
 import java.util.regex.Pattern
@@ -118,11 +118,6 @@ class Main {
         var logTime = false
     }
     private val logger = LoggerFactory.getLogger("Main")
-
-    private val legalNamePattern = Pattern.compile("myLegalName\"?[\\s=:]+\"([^\"]+)\"")
-    private val usernamePattern = Pattern.compile("\\s\"?username\"?[\\s=:]+\"?(\\w+)")
-    private val passwordPattern = Pattern.compile("\\s\"?password\"?[\\s=:]+\"?(\\w+)")
-    private val addressPattern = Pattern.compile("address\"?[\\s=:]+\"([^\"]+)\"")
 
     private val connectionMap = HashMap<String, CordaRPCConnection>()
     private val stateMap = HashMap<String, UniqueIdentifier>()
@@ -309,14 +304,12 @@ class Main {
      * password and node address.
      */
     private fun parseConfiguration(name: String, file: File, map: HashMap<String, Node>){
-        val encoded = Files.readAllBytes(file.toPath())
-        val text = String(encoded, StandardCharsets.UTF_8)
-                .replace('\n',' ')
-                .replace('\r',' ')
-        val legalName = findText(legalNamePattern, text)
-        val username = findText(usernamePattern, text)
-        val password = findText(passwordPattern, text)
-        val address = findText(addressPattern, text)
+        val config = ConfigFactory.parseReader(Files.newBufferedReader(file.toPath()))
+        val legalName = config.getString("myLegalName")
+        val address = config.getString("rpcSettings.address")
+        val users = config.getConfigList("security.authService.dataSource.users")[0]
+        val username = users.getString("username")
+        val password = users.getString("password")
 
         if (!legalName.contains("notary", true)){
             val node = Node(this, name, legalName, username, password, address)
@@ -348,17 +341,5 @@ class Main {
         accountMap.values.forEach {account ->
             println("Account ${account.name} on [${account.host.name}] with id ${account.identifier.id}")
         }
-    }
-
-    /**
-     * Retrieve the value described by the pattern from the text parameter.
-     * If the pattern is not found then throw an [IllegalArgumentException]
-     */
-    private fun findText(pattern: Pattern, text: String): String {
-        val matcher = pattern.matcher(text)
-        if (matcher.find()){
-            return matcher.group(1)
-        }
-        throw IllegalArgumentException()
     }
 }
